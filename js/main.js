@@ -655,11 +655,10 @@
       });
     }
 
-    // GitHub — 占位提示
+    // GitHub — 跳转提示
     if (githubBtn) {
-      githubBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        showToast('🔗 GitHub 链接待补充');
+      githubBtn.addEventListener('click', function () {
+        showToast('🔗 跳转到 GitHub');
       });
     }
 
