@@ -1,5 +1,5 @@
 /* ============================================
-   GY · 天空之隙 — 交互脚本
+   GY · 天空之隙
    光粒子 · 视差云 · 鼠标跟随 · 音乐播放器
    ============================================ */
 
@@ -55,7 +55,6 @@
   const timeCurrent = document.getElementById('time-current');
   const timeTotal = document.getElementById('time-total');
   const volumePct = document.getElementById('volume-pct');
-  const avatarImg = document.getElementById('avatar');
 
   // ==================== 状态 ====================
 

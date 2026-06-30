@@ -1,13 +1,15 @@
-# 音乐文件（太大，不上传）
+# 音乐文件（托管在蓝奏云，不纳入版本控制）
 assets/music/
-assets/music_clean/
-assets/bgm.mp3
 
 # 系统文件
 .DS_Store
 Thumbs.db
 desktop.ini
+*.tmp
 
-# IDE
+# 编辑器
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
