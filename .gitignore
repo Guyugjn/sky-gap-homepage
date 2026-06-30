@@ -1,0 +1,13 @@
+# 音乐文件（太大，不上传）
+assets/music/
+assets/music_clean/
+assets/bgm.mp3
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/

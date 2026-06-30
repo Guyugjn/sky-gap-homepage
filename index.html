@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>孤鱼GY · 天空之隙</title>
+  <link rel="icon" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 天空渐变背景 -->
+  <div class="sky-bg"></div>
+
+  <!-- 光粒子画布 -->
+  <canvas id="particles-canvas"></canvas>
+
+  <!-- 浮动云层（视差 + 漂移） -->
+  <!--
+    结构说明：
+    .clouds-layer → 固定全屏容器
+      .cloud-drift → 负责 CSS 漂移动画（从左到右无限循环）
+        .cloud       → 负责 JS 鼠标视差位移（transform）
+  -->
+  <div class="clouds-layer" id="clouds-layer">
+    <!-- 远层云 × 3 -->
+    <div class="cloud-drift cloud-drift--far" style="--drift-delay: 0s;">
+      <div class="cloud cloud--far" data-speed="0.015">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+    <div class="cloud-drift cloud-drift--far" style="top: 68%; --drift-delay: -18s;">
+      <div class="cloud cloud--far" data-speed="0.018">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+
+    <!-- 中层云 × 2 -->
+    <div class="cloud-drift cloud-drift--mid" style="--drift-delay: -8s;">
+      <div class="cloud cloud--mid" data-speed="0.04">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+    <div class="cloud-drift cloud-drift--mid" style="top: 78%; --drift-delay: -28s;">
+      <div class="cloud cloud--mid" data-speed="0.045">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>
+
+    <!-- 近层云 × 1 -->
+    <div class="cloud-drift cloud-drift--near" style="--drift-delay: -15s;">
+      <div class="cloud cloud--near" data-speed="0.08">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 鼠标跟随柔光 -->
+  <div class="cursor-glow" id="cursor-glow"></div>
+
+  <!-- 主内容区 -->
+  <main class="hero">
+    <!-- 头像 -->
+    <div class="avatar-wrapper">
+      <div class="avatar-ring"></div>
+      <img
+        src="assets/avatar.jpg"
+        alt="GY的头像"
+        class="avatar"
+        id="avatar"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+      >
+      <div class="avatar-placeholder" style="display:none;">
+        <span>孤鱼</span>
+      </div>
+    </div>
+
+    <!-- 名字 -->
+    <h1 class="name">孤鱼GY</h1>
+
+    <!-- 一句话介绍 -->
+    <p class="intro">在像素与星空间，编织属于自己的小小世界。</p>
+
+    <!-- 社交链接 -->
+    <div class="social-links">
+      <!-- GitHub -->
+      <div class="tip-wrap">
+        <a href="#" class="social-link" id="github-btn">
+          <svg viewBox="0 0 24 24" class="social-icon">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.083-.73.083-.73 1.205.085 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.418-1.305.762-1.604-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12 24 5.37 18.63 0 12 0z"/>
+          </svg>
+        </a>
+        <span class="social-tip">跳转到我的 GitHub</span>
+      </div>
+
+      <!-- Bilibili -->
+      <div class="tip-wrap">
+        <a href="https://space.bilibili.com/1249024266" target="_blank" rel="noopener" class="social-link" id="bilibili-btn">
+          <svg viewBox="0 0 24 24" class="social-icon">
+            <path clip-rule="evenodd" d="M4.977 3.561a1.31 1.31 0 111.818-1.884l2.828 2.728c.08.078.149.163.205.254h4.277a1.32 1.32 0 01.205-.254l2.828-2.728a1.31 1.31 0 011.818 1.884L17.82 4.66h.848A5.333 5.333 0 0124 9.992v7.34a5.333 5.333 0 01-5.333 5.334H5.333A5.333 5.333 0 010 17.333V9.992a5.333 5.333 0 015.333-5.333h.781L4.977 3.56zm.356 3.67a2.667 2.667 0 00-2.666 2.667v7.529a2.667 2.667 0 002.666 2.666h13.334a2.667 2.667 0 002.666-2.666v-7.53a2.667 2.667 0 00-2.666-2.666H5.333zm1.334 5.192a1.333 1.333 0 112.666 0v1.192a1.333 1.333 0 11-2.666 0v-1.192zM16 11.09c-.736 0-1.333.597-1.333 1.333v1.192a1.333 1.333 0 102.666 0v-1.192c0-.736-.597-1.333-1.333-1.333z" fill="currentColor" fill-rule="evenodd"/>
+          </svg>
+        </a>
+        <span class="social-tip">跳转到我的 Bilibili</span>
+      </div>
+
+      <!-- 邮箱（点击复制） -->
+      <div class="tip-wrap">
+        <a href="javascript:void(0)" class="social-link" id="email-btn">
+          <svg viewBox="0 0 24 24" class="social-icon">
+            <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+          </svg>
+        </a>
+        <span class="social-tip">点击复制邮箱</span>
+      </div>
+    </div>
+
+    <!-- 滚动提示 -->
+    <div class="scroll-hint">
+      <span class="scroll-arrow"></span>
+    </div>
+  </main>
+
+  <!-- 音乐播放器 -->
+  <div class="music-player" id="music-player">
+    <!-- 唱片 + 唱臂 + 飘散音符 -->
+    <div class="tip-wrap">
+      <div class="vinyl-wrap">
+        <span class="float-note float-note--1">♪</span>
+        <span class="float-note float-note--2">♫</span>
+        <span class="float-note float-note--3">♪</span>
+        <div class="vinyl-disc" id="vinyl-disc">
+          <div class="vinyl-label">
+            <span class="vinyl-note">♪</span>
+          </div>
+          <div class="vinyl-hole"></div>
+        </div>
+        <!-- 唱臂 -->
+        <div class="tonearm">
+          <div class="tonearm-head"></div>
+        </div>
+      </div>
+      <span class="social-tip">点击复制曲名</span>
+    </div>
+
+    <!-- 曲名气泡（居中显示，唱片 hover 时弹出） -->
+    <span class="music-label" id="music-label">BGM</span>
+
+    <!-- 上一首 -->
+    <button class="music-btn music-btn--sm" id="prev-btn" title="上一首">
+      <svg viewBox="0 0 24 24" class="music-icon-sm">
+        <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+      </svg>
+    </button>
+
+    <!-- 播放 / 暂停 -->
+    <button class="music-btn" id="music-btn" aria-label="播放 / 暂停">
+      <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-play">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+      <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-pause">
+        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+      </svg>
+    </button>
+
+    <!-- 下一首 -->
+    <button class="music-btn music-btn--sm" id="next-btn" title="下一首">
+      <svg viewBox="0 0 24 24" class="music-icon-sm">
+        <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+      </svg>
+    </button>
+
+    <!-- 播放模式切换：列表循环 / 单曲循环 / 随机 -->
+    <div class="mode-wrap">
+      <button class="music-btn music-btn--sm" id="mode-btn">
+        <svg viewBox="0 0 24 24" class="music-icon-sm">
+          <path d="M7 7h10v2H7V7zm0 4h7v2H7v-2zm11-4h-2v6l-1.5-1.5-1.41 1.41L17 17l3.91-3.91-1.41-1.41L18 13.18V7z"/>
+        </svg>
+      </button>
+      <span class="mode-tip" id="mode-tip">列表循环</span>
+    </div>
+
+    <!-- 进度条 + 时间 -->
+    <div class="progress-wrap">
+      <span class="time-label" id="time-current">0:00</span>
+      <div class="progress-bar" id="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <span class="time-label" id="time-total">0:00</span>
+    </div>
+
+    <!-- 音量控制 -->
+    <div class="volume-wrap">
+      <button class="music-btn music-btn--sm" id="volume-btn" title="音量">
+        <svg viewBox="0 0 24 24" class="music-icon-sm" id="volume-icon">
+          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+        </svg>
+      </button>
+      <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="5">
+      <span class="volume-pct" id="volume-pct">5%</span>
+    </div>
+  </div>
+
+  <!-- 复制提示气泡 -->
+  <div class="toast" id="toast">📋 邮箱已复制</div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
