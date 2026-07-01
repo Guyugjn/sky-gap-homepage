@@ -12,7 +12,7 @@
 |-------|---------------|
 | Particles | Canvas 2D — 55 glowing particles with radial gradients & flicker |
 | Clouds | Pure CSS ellipses + `@keyframes` drift (far/mid/near layers at different speeds) |
-| Flying Fish | SVG fish — autonomous flight + cursor attraction, with inertia & pupil tracking |
+| Flying Fish | SVG fish — autonomous flight + cursor chase + click ripple scare, with inertia, speed scaling & pupil tracking |
 | Player | `repeating-radial-gradient` groove texture + CSS rotation animation |
 | Audio | HTML5 `<audio>`, shuffle / repeat-one / list-loop, fade-in/out |
 

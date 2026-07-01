@@ -227,6 +227,8 @@
     var fishFlipTarget = -1;  // 目标朝向：-1=朝右，1=朝左
     var fishFlipSmooth = -1;  // 平滑插值后的 scaleX 值
 
+    var scaredUntil = 0;        // 受惊逃跑期间面朝远离光标方向
+
     function update() {
       var now = Date.now();
       var idleMs = lastMouseActivity ? now - lastMouseActivity : Infinity;
@@ -240,6 +242,8 @@
       } else {
         targetBlend = Math.max(0, 1 - (idleMs - IDLE_TIMEOUT) / 1500);
       }
+      // 受惊逃跑期间立刻切纯漫游，不等衰减
+      if (now < scaredUntil) { targetBlend = 0; attractBlend = 0; }
       attractBlend += (targetBlend - attractBlend) * 0.04;
 
       // ==== 漫游方向：从左向右，正弦波上下起伏 ====
@@ -306,9 +310,15 @@
       // ==== 朝向：追逐时面朝光标，漫游时面朝移动方向 ====
       var faceX, faceY;
       if (blend > 0.3 && cursorDist > 0.5) {
-        // 被吸引 → 始终面朝光标
-        faceX = dx;
-        faceY = dy;
+        if (now < scaredUntil) {
+          // 受惊逃跑 → 面朝远离光标方向（尾巴对着光标）
+          faceX = -dx;
+          faceY = -dy;
+        } else {
+          // 被吸引 → 始终面朝光标
+          faceX = dx;
+          faceY = dy;
+        }
       } else if (moveMag > 0.01) {
         // 漫游 → 面朝移动方向
         faceX = moveX;
@@ -325,9 +335,8 @@
         // 目标朝向：朝左还是朝右（平滑过渡）
         fishFlipTarget = faceDirX >= 0 ? -1 : 1;
 
-        // 旋转角：用 |faceDirX| 保证左右朝向一致（永远在 ±90° 内，眼睛在上）
-        var rawAngle = Math.atan2(faceDirY, Math.abs(faceDirX)) * 180 / Math.PI;
-
+        // 旋转角：rotate(正)=顺时针=头向上，光标在下时需头向下，故取反
+        var rawAngle = -Math.atan2(faceDirY, Math.abs(faceDirX)) * 180 / Math.PI;
         var diff = rawAngle - fishAngle;
         if (diff > 180) diff -= 360;
         if (diff < -180) diff += 360;
@@ -375,6 +384,35 @@
 
       requestAnimationFrame(update);
     }
+
+    // 点击任意位置 → 涟漪 + 鱼在范围内则逃跑
+    var FISH_SCARE_RANGE = 100; // 鱼受惊范围（px）
+    document.addEventListener('click', function (e) {
+      // 涟漪
+      var ripple = document.createElement('div');
+      ripple.className = 'click-ripple';
+      ripple.style.left = (e.clientX - 40) + 'px';
+      ripple.style.top  = (e.clientY - 40) + 'px';
+      document.body.appendChild(ripple);
+      ripple.addEventListener('animationend', function () { ripple.remove(); });
+
+      // 鱼在范围内 → 弹飞
+      var dx = mouseX - e.clientX;
+      var dy = mouseY - e.clientY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < FISH_SCARE_RANGE) {
+        // 立刻反向弹飞
+        var awayX = dx / (dist || 1);
+        var awayY = dy / (dist || 1);
+        fishVelX = awayX * 22;
+        fishVelY = awayY * 22;
+        // 瞬间翻转面朝远离方向
+        fishFlipTarget = awayX >= 0 ? -1 : 1;
+        fishFlipSmooth = fishFlipTarget;
+        // 3~5 秒后恢复正常
+        scaredUntil = Date.now() + 3000 + Math.random() * 2000;
+      }
+    });
 
     // 鼠标移动 → 记录活跃时间 + 更新目标位置
     document.addEventListener('mousemove', function (e) {
