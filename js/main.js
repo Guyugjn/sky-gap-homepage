@@ -29,16 +29,13 @@
         '255, 245, 238',       // 贝壳色
       ],
     },
-    parallax: {
-      factor: 0.03,            // 鼠标视差系数
-    },
+    // parallax 已移除 — 云层不再跟随鼠标
   };
 
   // ==================== DOM 引用 ====================
 
   const canvas = document.getElementById('particles-canvas');
-  const cloudsLayer = document.getElementById('clouds-layer');
-  const cursorGlow = document.getElementById('cursor-glow');
+  const cursorFish = document.getElementById('cursor-fish');
   const musicPlayer = document.getElementById('music-player');
   const musicBtn = document.getElementById('music-btn');
   const musicLabel = document.getElementById('music-label');
@@ -58,10 +55,19 @@
 
   // ==================== 状态 ====================
 
-  let mouseX = window.innerWidth / 2;
-  let mouseY = window.innerHeight / 2;
+  let mouseX = Math.random() * window.innerWidth;
+  let mouseY = Math.random() * window.innerHeight;
   let targetMouseX = mouseX;
   let targetMouseY = mouseY;
+  let fishAngle = (Math.random() - 0.5) * 20; // 初始接近水平，±10°
+
+  // 鱼自主飞行状态
+  let lastMouseActivity = 0;
+  let wanderAngle = Math.random() * Math.PI * 2;
+  let wanderPhase = Math.random() * Math.PI * 2;
+  let attractBlend = 0; // 0=漫游, 1=追逐光标
+  let fishVelX = 0;     // 飞鱼当前速度（带惯性）
+  let fishVelY = 0;
   let audio = null;
   let isPlaying = false;
   let currentIndex = 0;       // 当前播放索引
@@ -203,63 +209,179 @@
     animationId = requestAnimationFrame(animate);
   }
 
-  // ==================== 2. 鼠标视差 + 跟随柔光 ====================
+  // ==================== 2. 飞鱼：自主漫游 + 鼠标吸引 ====================
 
   function initParallax() {
-    if (!cloudsLayer || !cursorGlow) return;
+    if (!cursorFish) return;
 
-    const clouds = cloudsLayer.querySelectorAll('.cloud');
+    var pupil = cursorFish.querySelector('.fish-eye-pupil');
+    var shine = cursorFish.querySelector('.fish-eye-shine');
+
+    var FISH_SPEED = 2.5;         // 恒定速度（px/帧）
+    var IDLE_TIMEOUT = 4000;      // 鼠标静止 4 秒后飞走
+    var MIN_CURSOR_DIST = 70;     // 追逐时与光标的最小距离
+
+    // 鱼始终可见
+    cursorFish.classList.add('visible');
+
+    var fishFlipTarget = -1;  // 目标朝向：-1=朝右，1=朝左
+    var fishFlipSmooth = -1;  // 平滑插值后的 scaleX 值
 
     function update() {
-      // 平滑插值
-      mouseX += (targetMouseX - mouseX) * 0.06;
-      mouseY += (targetMouseY - mouseY) * 0.06;
+      var now = Date.now();
+      var idleMs = lastMouseActivity ? now - lastMouseActivity : Infinity;
 
-      // 云层视差位移
-      const centerX = window.innerWidth / 2;
-      const centerY = window.innerHeight / 2;
-      const deltaX = (mouseX - centerX) * CONFIG.parallax.factor;
-      const deltaY = (mouseY - centerY) * CONFIG.parallax.factor;
+      // ==== 吸引强度：0=纯漫游，1=纯追逐 ====
+      var targetBlend;
+      if (!lastMouseActivity) {
+        targetBlend = 0;
+      } else if (idleMs < IDLE_TIMEOUT) {
+        targetBlend = 1;
+      } else {
+        targetBlend = Math.max(0, 1 - (idleMs - IDLE_TIMEOUT) / 1500);
+      }
+      attractBlend += (targetBlend - attractBlend) * 0.04;
 
-      clouds.forEach(function (cloud) {
-        const speed = parseFloat(cloud.getAttribute('data-speed')) || 0.04;
-        cloud.style.transform =
-          'translate(' + (deltaX * speed * 40) + 'px, ' + (deltaY * speed * 20) + 'px)';
-      });
+      // ==== 漫游方向：从左向右，正弦波上下起伏 ====
+      wanderPhase += 0.015;
+      var verticalWave = Math.sin(wanderPhase * 0.7) * 0.5; // ±~28°
+      var wanderDX = Math.cos(verticalWave);  // 单位方向（始终朝右）
+      var wanderDY = Math.sin(verticalWave);  // 上下起伏分量
 
-      // 鼠标跟随柔光
-      cursorGlow.style.left = mouseX + 'px';
-      cursorGlow.style.top = mouseY + 'px';
+      // ==== 吸引方向：保持 MIN_CURSOR_DIST 距离 ====
+      var dx = targetMouseX - mouseX;
+      var dy = targetMouseY - mouseY;
+      var cursorDist = Math.sqrt(dx * dx + dy * dy);
+      var attractDX = 0, attractDY = 0;
+
+      if (cursorDist > 0.5) {
+        var udx = dx / cursorDist; // 指向光标的单位向量
+        var udy = dy / cursorDist;
+        var margin = 8; // 死区容差
+
+        if (cursorDist > MIN_CURSOR_DIST + margin) {
+          // 太远 → 靠近光标
+          attractDX = udx;
+          attractDY = udy;
+        } else if (cursorDist < MIN_CURSOR_DIST - margin) {
+          // 太近 → 后退
+          attractDX = -udx;
+          attractDY = -udy;
+        }
+        // 在死区内：吸引为零，鱼原地漫游
+      }
+
+      // ==== 混合方向 + 惯性速度 ====
+      var blend = attractBlend;
+      var moveX = wanderDX * (1 - blend) + attractDX * blend;
+      var moveY = wanderDY * (1 - blend) + attractDY * blend;
+      var moveMag = Math.sqrt(moveX * moveX + moveY * moveY);
+
+      // 目标速度：从混合方向计算，惯性平滑过渡
+      var INERTIA = 0.08; // 惯性系数（越小惯性越明显）
+
+      // 距光标较远时加速追赶（1.0x → 1.5x，300px 以上满速）
+      var speedMult = 1;
+      if (blend > 0.1) {
+        speedMult = 1 + Math.min(1, Math.max(0, (cursorDist - MIN_CURSOR_DIST) / 230)) * 0.5;
+      }
+
+      var targetVelX = 0, targetVelY = 0;
+      if (moveMag > 0.01) {
+        targetVelX = (moveX / moveMag) * FISH_SPEED * speedMult;
+        targetVelY = (moveY / moveMag) * FISH_SPEED * speedMult;
+      }
+      fishVelX += (targetVelX - fishVelX) * INERTIA;
+      fishVelY += (targetVelY - fishVelY) * INERTIA;
+      mouseX += fishVelX;
+      mouseY += fishVelY;
+
+      // ==== 边界处理 ====
+      if (mouseX > window.innerWidth + 80) {
+        mouseX = -80;
+        mouseY = 60 + Math.random() * (window.innerHeight - 120);
+      }
+      mouseY = Math.max(50, Math.min(window.innerHeight - 50, mouseY));
+
+      // ==== 朝向：追逐时面朝光标，漫游时面朝移动方向 ====
+      var faceX, faceY;
+      if (blend > 0.3 && cursorDist > 0.5) {
+        // 被吸引 → 始终面朝光标
+        faceX = dx;
+        faceY = dy;
+      } else if (moveMag > 0.01) {
+        // 漫游 → 面朝移动方向
+        faceX = moveX;
+        faceY = moveY;
+      } else {
+        faceX = wanderDX;
+        faceY = wanderDY;
+      }
+
+      var faceMag = Math.sqrt(faceX * faceX + faceY * faceY);
+      if (faceMag > 0.01) {
+        var faceDirX = faceX / faceMag;
+        var faceDirY = faceY / faceMag;
+        // 目标朝向：朝左还是朝右（平滑过渡）
+        fishFlipTarget = faceDirX >= 0 ? -1 : 1;
+
+        // 旋转角：用 |faceDirX| 保证左右朝向一致（永远在 ±90° 内，眼睛在上）
+        var rawAngle = Math.atan2(faceDirY, Math.abs(faceDirX)) * 180 / Math.PI;
+
+        var diff = rawAngle - fishAngle;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        fishAngle += diff * 0.08;
+      }
+
+      // ==== 渲染 ====
+      // 平滑翻转：避免 scaleX 瞬时跳变
+      fishFlipSmooth += (fishFlipTarget - fishFlipSmooth) * 0.08;
+      cursorFish.style.left = mouseX + 'px';
+      cursorFish.style.top = mouseY + 'px';
+      cursorFish.style.transform =
+        'translate(-42.1%, -51.6%) scaleX(' + fishFlipSmooth.toFixed(3) + ') rotate(' + fishAngle + 'deg)';
+
+      // ==== 瞳孔追踪 ====
+      if (pupil) {
+        if (blend > 0.3 && cursorDist > 10) {
+          // 追逐模式：眼窝内追踪光标
+          var gazeRaw = Math.atan2(dy, dx) * 180 / Math.PI;
+          if (gazeRaw > 90) gazeRaw -= 180;
+          if (gazeRaw < -90) gazeRaw += 180;
+          var eyeError = gazeRaw - fishAngle;
+          if (eyeError > 180) eyeError -= 360;
+          if (eyeError < -180) eyeError += 360;
+          var clamped = Math.max(-35, Math.min(35, eyeError));
+          // scaleX 会反转水平方向，用 fishFlip 补偿
+          var shiftX = (clamped / 35) * 1.6 * (fishFlipSmooth > 0 ? 1 : -1);
+          var shiftY = (clamped / 35) * 0.9;
+          pupil.setAttribute('cx', (22 + shiftX).toFixed(2));
+          pupil.setAttribute('cy', (29 + shiftY).toFixed(2));
+          if (shine) {
+            shine.setAttribute('cx', (21 + shiftX * 0.65).toFixed(2));
+            shine.setAttribute('cy', (28 + shiftY * 0.65).toFixed(2));
+          }
+        } else {
+          // 漫游模式：瞳孔归中
+          pupil.setAttribute('cx', '22');
+          pupil.setAttribute('cy', '29');
+          if (shine) {
+            shine.setAttribute('cx', '21');
+            shine.setAttribute('cy', '28');
+          }
+        }
+      }
 
       requestAnimationFrame(update);
     }
 
+    // 鼠标移动 → 记录活跃时间 + 更新目标位置
     document.addEventListener('mousemove', function (e) {
+      lastMouseActivity = Date.now();
       targetMouseX = e.clientX;
       targetMouseY = e.clientY;
-
-      // 首次移动时显示光晕
-      if (!cursorGlow.classList.contains('visible')) {
-        cursorGlow.classList.add('visible');
-      }
     });
-
-    // 鼠标离开窗口时隐藏光晕
-    document.addEventListener('mouseleave', function () {
-      cursorGlow.classList.remove('visible');
-    });
-
-    document.addEventListener('mouseenter', function () {
-      cursorGlow.classList.add('visible');
-    });
-
-    // 触屏设备：无鼠标跟随，但依然有视差（使用设备陀螺仪或固定位置）
-    if ('ontouchstart' in window) {
-      cursorGlow.style.display = 'none';
-      // 触屏设备将云层定位于中心
-      targetMouseX = window.innerWidth / 2;
-      targetMouseY = window.innerHeight / 2;
-    }
 
     update();
   }
@@ -269,73 +391,9 @@
   function initMusic() {
     if (!musicBtn || !musicPlayer) return;
 
-    // 曲名显示列表（与 00.mp3 ~ 63.mp3 一一对应）
-    var PLAYLIST_NAMES = [
-      '-記憶- (ヨスガノソラ メインテーマ) - 市川淳',
-      '-遠い空へ- (ヨスガノソラ メインテーマ) - 市川淳',
-      '-願い- (ヨスガノソラ メインテーマ) - 市川淳',
-      'BLUE - 金閉開羅巧夢',
-      'Bamboo - Piano Masters',
-      'Cry for the moon - 出羽良彰',
-      'Decretum - 梶浦由記',
-      'Deep Inside Region - 市川淳',
-      'Final Breath - Cœur de pirate',
-      'Fonte - Saigenji',
-      'Hyourinaomoi - 出羽良彰',
-      'I Will Protect You - 横山克',
-      'Kishiouno hokori - 川井憲次',
-      'Let me hear (Remix) - S9ryne',
-      'Nr. 1 - Martin Ermen',
-      'Ocean of Memories - 深澤秀行',
-      'Silent express - 出羽良彰',
-      'Sorrow - 日本群星',
-      'The moment - 跟弃',
-      'The moment（music box ver） - 跟弃',
-      'Yuri on ICE - 梅林太郎',
-      'a memories for us feat.Day\'s - Clover Day\'s',
-      'deep in old grief (纯音乐) - 梶浦由記',
-      'imbalanceAlice - 深澤秀行',
-      'take your hands - 梶浦由記',
-      'かたわれ時 - RADWIMPS',
-      'すりぬける心 - 渡辺善太郎',
-      'アゲイン - 横山克',
-      'ウソとホント～PianoSolo - 横山克',
-      'シシリエンヌ - 田中公平',
-      'リズと青い鳥 第三楽章「愛ゆえの決断」 - 北宇治高校吹奏楽部',
-      'ロック风アレンジ - 麻枝准',
-      '不安な心 - 川田瑠夏',
-      '予感 - MANYO',
-      '五月雨 - 高梨康治、刃-yaiba-',
-      '今日は飲まなきゃ - 浜口史郎',
-      '伝说 - 出羽良彰',
-      '優等悪魔の光と影 - 松尾早人',
-      '去り逝く者、残される者 - MANYO',
-      '友人A君を私の伴奏者に任命します - 横山克',
-      '命 - S9ryne',
-      '回梦游仙 - 骆集益',
-      '夜の向日葵 - szak',
-      '夜想曲第2番 変ホ長調 op.9-2 -ノクターン- - 末廣健一郎',
-      '天空を駆ける風の都 - 狐の工作室',
-      '寂しい夜 - 三輪学',
-      '小さな旋律 - szak',
-      '恋の記憶 - 松尾早人',
-      '恋～口づけまでの距離 [メインテーマ] - 松尾早人',
-      '想い出は遠くの日々 - 天門',
-      '戸惑いの中 - 市川淳',
-      '春の香り - 横山克',
-      '栄の活躍 - 松本晃彦',
-      '潮鳴り - 折戸伸治',
-      '瞳ニ映ル景色 - 末廣健一郎',
-      '私の嘘～PianoSolo - 横山克',
-      '私を好きにならないで - 大島ミチル',
-      '終ワリノ歌 - 末廣健一郎',
-      '追い求めてきたもの - 三輪学',
-      '降り続く雨の街で - VISUAL ARTS、Key Sounds Label',
-      '雲流れ - Foxtail-Grass Studio',
-      '饒舌な本と無口な少女 - 松尾早人',
-      '鳥の詩 ~ - Lia',
-    ];
-    var totalTracks = PLAYLIST_NAMES.length;
+    // 从 playlist.js（<script> 标签加载）读取曲目列表
+    var playlist = window.__PLAYLIST__ || [];
+    var totalTracks = playlist.length;
 
     var volume = CONFIG.music.startVolume;
     var started = false; // 是否已完成首次加载
@@ -347,20 +405,23 @@
 
     // === 工具函数 ===
 
-    function padIndex(i) {
-      return (i < 10 ? '0' : '') + i;
+    // 从文件名获取显示曲名（去掉 .mp3 后缀）
+    function getDisplayName(index) {
+      var filename = playlist[index] || '';
+      return filename.replace(/\.mp3$/i, '');
     }
 
     function updateLabel(index) {
       if (!musicLabel) return;
-      var name = PLAYLIST_NAMES[index];
+      var name = getDisplayName(index);
       musicLabel.textContent = name;
       musicLabel.title = name;
+      musicLabel.style.display = 'block'; // 首次播放时显示曲名
     }
 
     function loadTrack(index) {
       currentIndex = index;
-      var src = CONFIG.music.dir + padIndex(index) + '.mp3';
+      var src = CONFIG.music.dir + encodeURIComponent(playlist[index]);
       audio.src = src;
       updateLabel(index);
       started = true;
@@ -535,7 +596,7 @@
 
     // === 切歌时弹出曲名提示 ===
     function notifySongChange() {
-      showToast('🎵 ' + PLAYLIST_NAMES[currentIndex], 2200);
+      showToast('🎵 ' + getDisplayName(currentIndex), 2200);
     }
 
     // === 播放模式切换 ===
@@ -563,7 +624,7 @@
       vinylWrap.addEventListener('click', function (e) {
         e.stopPropagation();
         if (!started) return;
-        copyText(PLAYLIST_NAMES[currentIndex], function () {
+        copyText(getDisplayName(currentIndex), function () {
           showToast('📋 曲名已复制');
         });
       });
@@ -615,6 +676,7 @@
     musicBtn.addEventListener('click', function () {
       if (!started) {
         // 首次加载
+        if (!totalTracks) { showToast('⚠️ 播放列表为空，请运行 python generate_playlist.py'); return; }
         loadTrack(randomIndex());
         play();
         return;
