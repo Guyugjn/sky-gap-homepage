@@ -29,6 +29,7 @@ assets/
 - **漫游**：从左向右正弦波起伏飞行，始终朝右。无鼠标活动时纯漫游。
 - **追逐**：鼠标移动后 `attractBlend` 从 0 渐变为 1，鱼被光标吸引。
 - **失去兴趣**：鼠标静止 4 秒后 `attractBlend` 从 1 渐变为 0，1.5 秒内完全回到漫游。
+- **受惊逃跑**：点击鱼附近（100px 内）→ 立刻反向弹飞，`attractBlend` 直接归零纯漫游，`fishFlipSmooth` 瞬间翻转朝远离方向，3~5 秒后恢复。
 
 **死区机制**：距光标 62-78px 为死区（`MIN_CURSOR_DIST=70, margin=8`）。>78px 靠近，<62px 后退，死区内吸引方向为零。
 
@@ -39,7 +40,7 @@ assets/
 **朝向与渲染**：
 - `fishFlipTarget`：`faceDirX >= 0 ? -1 : 1`（-1=朝右 via `scaleX(-1)`，1=朝左）
 - `fishFlipSmooth`：0.08 插值避免翻转突变
-- 旋转角：`atan2(faceDirY, |faceDirX|)` 保证眼睛永远在上（±90° 内）
+- 旋转角：`-atan2(faceDirY, |faceDirX|)`（`rotate(正)`=顺时针=头向上，故取反保证光标在下时头向下），永远在 ±90° 内，眼睛在上
 - `transform: translate(-42.1%, -51.6%) scaleX(fishFlipSmooth) rotate(fishAngle)`
 - `transform-origin: 42.1% 51.6%` 对齐鱼身体心，防止旋转偏移
 
@@ -47,9 +48,15 @@ assets/
 
 **边界处理**：右边界外 +80px 后瞬移到左边界外 -80px，随机 Y；上下边界钳制 50px。
 
+**受惊状态**：
+- `scaredUntil` 时间戳，点击涟漪距鱼 <100px 时设为 `now + 3000~5000ms`
+- 受惊期间 `attractBlend` 直接归零、`fishFlipSmooth = fishFlipTarget` 瞬间翻转
+- `.click-ripple`：80px 淡蓝光晕圆环，`@keyframes ripple-expand` 0.2→3x 缩放 + 渐隐
+
 **关键变量**：
 - `FISH_SPEED = 2.5`（px/帧）、`IDLE_TIMEOUT = 4000`（ms）、`MIN_CURSOR_DIST = 70`（px）
 - `INERTIA = 0.08`、速度缩放范围 `1.0x ~ 1.5x`（300px 满速）
+- `FISH_SCARE_RANGE = 100`、弹飞速度 `22`（px/帧）
 
 ### 云层漂移（纯 CSS）
 
@@ -67,6 +74,7 @@ assets/
 - **曲名气泡显隐**：CSS 默认 `display: none`，JS `updateLabel()` 中设置 `display: block` 在首次播放时显示。
 - **飘散音符**：`.float-note` 三个 span，`.vinyl-wrap.spinning` 时触发 `@keyframes float-note-up` 从唱片飘出。
 - **毛玻璃提示气泡**：`.tip-wrap` / `.mode-wrap` 包裹触发元素 + `.social-tip` / `.mode-tip` span，CSS `:hover` 通过 `opacity` 过渡显示。
+- **点击涟漪**：`document` click 时 JS 动态创建 `<div class="click-ripple">`，CSS `@keyframes ripple-expand` 控制缩放+渐隐，动画结束后 JS 移除元素。鱼在范围内则触发受惊逃跑。
 
 ### 音乐播放器核心变量（main.js）
 - `playlist` — 从 `window.__PLAYLIST__` 读取（由 `<script src="assets/music/playlist.js">` 注入），文件名数组
