@@ -1,4 +1,4 @@
-# 音乐文件（托管在蓝奏云，不纳入版本控制）
+# 音乐文件
 assets/music/*
 !assets/music/playlist.js
 
