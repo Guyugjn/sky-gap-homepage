@@ -2,15 +2,19 @@
  * Live2D Widget
  * https://github.com/stevenjoezhang/live2d-widget
  *
- * 策略：核心 JS 走 CDN，模型/纹理走本地（同源无 CORS 问题）
- * - waifu-tips.js  → CDN（ES 模块，HTTPS 无 CORS 问题）
- * - 模型/纹理      → 本地（同源请求，服务器和 file://+CDN 都可用）
+ * 策略：
+ * - waifu-tips.js → CDN（ES 模块，HTTPS 无 CORS 问题）
  * - waifu-tips.json → 内联 Blob URL（避免 fetch 本地 JSON 失败）
  * - live2d.min.js / waifu.css → 本地
+ * - 模型文件：
+ *   · file:// 协议 → CDN（Chrome 禁止 file:// 下的 fetch，CDN 有 CORS 头）
+ *   · HTTP 服务器  → 本地（同源请求，无 CORS 问题）
  */
 
 const live2d_path = 'live2d/';
 const cdn_js = 'https://fastly.jsdelivr.net/npm/live2d-widgets@1.0.1/dist/';
+const isFileProtocol = window.location.protocol === 'file:';
+const cdn_model = 'https://cdn.jsdelivr.net/npm/live2d-widget-model-izumi@1.0.5/assets/';
 
 // ============================================================
 // 内联 waifu-tips.json（模型路径指向本地，同源请求）
@@ -110,7 +114,7 @@ const waifuTipsData = {
   "models": [
     {
       "name": "Izumi (和泉)",
-      "paths": [live2d_path + "models/izumi/izumi.model.json"],
+      "paths": [isFileProtocol ? cdn_model + "izumi.model.json" : live2d_path + "models/izumi/izumi.model.json"],
       "message": "和泉 Izumi ～"
     }
   ]
