@@ -1,6 +1,6 @@
 /* ============================================
    GY · 天空之隙
-   光粒子 · 视差云 · 鼠标跟随 · 音乐播放器
+   光粒子 · 飞鱼自主飞行 · 音乐播放器
    ============================================ */
 
 (function () {
@@ -29,7 +29,6 @@
         '255, 245, 238',       // 贝壳色
       ],
     },
-    // parallax 已移除 — 云层不再跟随鼠标
   };
 
   // ==================== DOM 引用 ====================
@@ -82,10 +81,14 @@
     var toast = document.getElementById('toast');
     if (!toast) return;
     toast.textContent = msg;
+    /* Twemoji 重新解析 — 动态 emoji 跨平台统一渲染 */
+    if (window.twemoji) window.twemoji.parse(toast);
     clearTimeout(_toastTimer);
     toast.classList.remove('show');
-    void toast.offsetWidth;
-    toast.classList.add('show');
+    /* 用 rAF 代替 void offsetWidth 强制回流，避免同步布局计算 */
+    requestAnimationFrame(function () {
+      toast.classList.add('show');
+    });
     _toastTimer = setTimeout(function () {
       toast.classList.remove('show');
     }, duration || 1800);
@@ -440,6 +443,9 @@
     audio = new Audio();
     audio.volume = 0;
     audio.preload = 'auto';
+    /* 移动端兼容：iOS Safari 必须设置 playsinline，否则 play() 会静默拒绝 */
+    audio.setAttribute('playsinline', '');
+    audio.setAttribute('webkit-playsinline', '');
 
     // === 工具函数 ===
 
@@ -484,6 +490,7 @@
         fadeInVolume();
       }).catch(function (err) {
         console.warn('播放失败：', err.message);
+        showToast('⚠️ 播放失败，请检查网络或点击重试', 2500);
       });
     }
 

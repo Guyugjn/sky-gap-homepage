@@ -196,6 +196,8 @@
     var mySign = getZodiacSign(BIRTHDAY.month, BIRTHDAY.day);
 
     document.getElementById('my-sign-emoji').textContent = mySign.emoji;
+    /* Twemoji 重新解析 — 星座符号跨平台统一渲染 */
+    if (window.twemoji) window.twemoji.parse(document.getElementById('my-sign-emoji'));
     document.getElementById('my-sign-name').textContent = mySign.nameCN;
     document.getElementById('my-sign-date').textContent = formatDateRange(mySign);
     document.getElementById('my-sign-element').textContent = mySign.element + '象';
@@ -228,6 +230,8 @@
     var sign = currentFortuneSign;
     document.getElementById('fortune-title').textContent =
       sign.emoji + ' ' + sign.nameCN + ' · ' + (TIME_NAMES[currentFortuneTime] || currentFortuneTime);
+    /* Twemoji 重新解析 — 运势标题中的星座符号 */
+    if (window.twemoji) window.twemoji.parse(document.getElementById('fortune-title'));
 
     // 指数条
     var indexData = data.index || {};
@@ -262,6 +266,8 @@
     if (ft.work && ft.work.length > 2) detailParts.push('<p><strong>💼 工作：</strong>' + ft.work + '</p>');
     if (ft.money && ft.money.length > 2) detailParts.push('<p><strong>💰 财富：</strong>' + ft.money + '</p>');
     document.getElementById('fortune-detail-text').innerHTML = detailParts.join('');
+    /* Twemoji 重新解析 — 运势详情中的动态 emoji */
+    if (window.twemoji) window.twemoji.parse(document.getElementById('fortune-detail-text'));
   }
 
   /** 显示加载中 */
@@ -393,6 +399,8 @@
       var sign = getZodiacSign(month, day);
 
       document.getElementById('query-sign-emoji').textContent = sign.emoji;
+      /* Twemoji 重新解析 — 访客查询星座符号 */
+      if (window.twemoji) window.twemoji.parse(document.getElementById('query-sign-emoji'));
       document.getElementById('query-sign-name').textContent = sign.nameCN;
       document.getElementById('query-sign-date').textContent = formatDateRange(sign);
       document.getElementById('query-sign-element').textContent = sign.element + '象';

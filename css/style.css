@@ -48,6 +48,16 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 全局：减少移动端双击缩放延迟 */
+button,
+a,
+select,
+input[type="range"],
+.vinyl-wrap,
+.scroll-hint {
+  touch-action: manipulation;
+}
+
 body {
   font-family: var(--font-cn);
   color: var(--text-primary);
@@ -58,6 +68,8 @@ body {
   line-height: 1.7;
   /* 禁止移动端下拉刷新导致的白边 */
   overscroll-behavior: none;
+  /* 刘海屏 / 底部指示条安全区适配 */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* --- 天空背景 --- */
@@ -93,9 +105,9 @@ body {
 }
 
 /*
-  云朵两层结构：
+  云朵结构：
   - .cloud-drift：负责绝对定位 + CSS 漂移动画（translateX 从左到右无限循环）
-  - .cloud：       负责 JS 鼠标视差位移（transform），避免与动画冲突
+  - .cloud：       纯 CSS 云朵造型（椭圆拼接），不参与 JS 交互
 */
 
 /* 漂移容器 */
@@ -119,7 +131,6 @@ body {
 /* 云朵本体 — 用多个椭圆拼成蓬松的形状 */
 .cloud {
   position: relative;
-  will-change: transform;
 }
 
 .cloud span {
@@ -506,26 +517,26 @@ body {
 /* --- 滚动提示 --- */
 .scroll-hint {
   position: absolute;
-  bottom: 5rem;
+  bottom: 4.5rem;
   left: 50%;
   transform: translateX(-50%);
   cursor: pointer;
-  animation: fade-up 1.2s 1.1s both, scroll-bob 2.2s 1.8s ease-in-out infinite;
+  animation: fade-up 1.2s 1.1s both, scroll-bob 2s 1.8s ease-in-out infinite;
 }
 
 .scroll-arrow {
   display: block;
-  width: 28px;
-  height: 28px;
-  border-right: 2px solid var(--text-secondary);
-  border-bottom: 2px solid var(--text-secondary);
+  width: 36px;
+  height: 36px;
+  border-right: 3px solid var(--text-secondary);
+  border-bottom: 3px solid var(--text-secondary);
   transform: rotate(45deg);
-  opacity: 0.5;
+  opacity: 0.7;
 }
 
 @keyframes scroll-bob {
   0%, 100% { transform: translateX(-50%) translateY(0); }
-  50%      { transform: translateX(-50%) translateY(10px); }
+  50%      { transform: translateX(-50%) translateY(14px); }
 }
 
 /* --- 唱片机 --- */
@@ -709,8 +720,8 @@ body {
 /* --- 音乐播放器 --- */
 .music-player {
   position: fixed;
-  bottom: 1.8rem;
-  left: 1.8rem;
+  bottom: calc(1.8rem + env(safe-area-inset-bottom, 0px));
+  left: calc(1.8rem + env(safe-area-inset-left, 0px));
   z-index: 10;
   display: flex;
   align-items: center;
@@ -828,6 +839,9 @@ body {
   font-size: 0.78rem;
   color: var(--text-primary);
   white-space: nowrap;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -910,7 +924,7 @@ body {
 .toast {
   position: fixed;
   bottom: 1.8rem;
-  right: 1.8rem;
+  left: 50%;
   z-index: 20;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
@@ -922,13 +936,13 @@ body {
   box-shadow: 0 4px 20px rgba(137, 196, 225, 0.3);
   pointer-events: none;
   opacity: 0;
-  transform: translateY(12px);
+  transform: translate(-50%, 12px);
   transition: opacity 0.35s ease, transform 0.35s ease;
 }
 
 .toast.show {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 /* ============================================
@@ -1213,19 +1227,6 @@ body {
   text-align: center;
 }
 
-/* 左侧暖金 accent 条（用伪元素，避免 border-radius 角接缝） */
-.countdown-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  background: var(--warm-accent);
-  border-radius: 0 2px 2px 0;
-  opacity: 0.75;
-}
-
 /* 上行两卡片统一收紧高度 */
 .countdown-card,
 .sign-info-card {
@@ -1256,11 +1257,6 @@ body {
 .sign-info-card .sign-emoji {
   font-size: 2.4rem !important;
   margin-bottom: 0.3rem;
-  transition: transform 0.3s ease;
-}
-
-.sign-info-card:hover .sign-emoji {
-  transform: scale(1.12);
 }
 
 @keyframes birthday-glow {
@@ -1865,4 +1861,23 @@ body {
 @media (max-width: 768px) {
   #waifu { display: none !important; }
   #waifu-toggle { display: none !important; }
+}
+
+/* ============================================
+   Twemoji 统一 emoji 渲染
+   ============================================ */
+
+/* Twemoji 将 emoji 替换为 <img>，用 !important 覆盖其内联宽高，
+   让图片继承父元素的 font-size 来缩放。
+   同时禁用图片的默认交互行为，使其表现与原始文字 emoji 一致 */
+.emoji {
+  width: 1em !important;
+  height: 1em !important;
+  vertical-align: -0.1em;
+  display: inline;
+  pointer-events: none;        /* 点击穿透 — 不拦截鼠标/涟漪事件 */
+  user-select: none;           /* 禁止选中高亮 */
+  -webkit-user-select: none;
+  -webkit-user-drag: none;     /* 禁止拖拽（图片默认可拖拽，会造成"被鼠标影响"的感觉） */
+  -webkit-touch-callout: none; /* iOS 长按不弹出菜单 */
 }

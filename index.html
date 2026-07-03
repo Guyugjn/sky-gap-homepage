@@ -27,31 +27,31 @@
   <div class="clouds-layer" id="clouds-layer">
     <!-- 远层云 × 3 -->
     <div class="cloud-drift cloud-drift--far" style="--drift-delay: 0s;">
-      <div class="cloud cloud--far" data-speed="0.015">
+      <div class="cloud cloud--far">
         <span></span><span></span><span></span>
       </div>
     </div>
     <div class="cloud-drift cloud-drift--far" style="top: 68%; --drift-delay: -18s;">
-      <div class="cloud cloud--far" data-speed="0.018">
+      <div class="cloud cloud--far">
         <span></span><span></span><span></span>
       </div>
     </div>
 
     <!-- 中层云 × 2 -->
     <div class="cloud-drift cloud-drift--mid" style="--drift-delay: -8s;">
-      <div class="cloud cloud--mid" data-speed="0.04">
+      <div class="cloud cloud--mid">
         <span></span><span></span><span></span><span></span>
       </div>
     </div>
     <div class="cloud-drift cloud-drift--mid" style="top: 78%; --drift-delay: -28s;">
-      <div class="cloud cloud--mid" data-speed="0.045">
+      <div class="cloud cloud--mid">
         <span></span><span></span><span></span><span></span>
       </div>
     </div>
 
     <!-- 近层云 × 1 -->
     <div class="cloud-drift cloud-drift--near" style="--drift-delay: -15s;">
-      <div class="cloud cloud--near" data-speed="0.08">
+      <div class="cloud cloud--near">
         <span></span><span></span><span></span>
       </div>
     </div>
@@ -263,7 +263,7 @@
             <div class="fortune-detail-text" id="fortune-detail-text"></div>
           </details>
           <!-- 加载/错误提示 -->
-          <p class="fortune-loading" id="fortune-loading">加载中...</p>
+          <p class="fortune-loading" id="fortune-loading">加载中…</p>
           <p class="fortune-error" id="fortune-error" style="display:none;">运势加载失败，请稍后重试</p>
         </div>
 
@@ -407,5 +407,17 @@
   <script src="js/zodiac.js"></script>
   <!-- Live2D 角色：JS + 模型全部走 CDN，file:// 直接打开可用 -->
   <script src="live2d/autoload.js"></script>
+  <!-- Twemoji — 统一跨平台 emoji 渲染 -->
+  <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js"></script>
+  <script>
+    /* Twemoji 加载完成后解析页面中所有 emoji */
+    (function check() {
+      if (typeof twemoji !== 'undefined') {
+        twemoji.parse(document.body, { className: 'emoji' });
+      } else {
+        setTimeout(check, 50);
+      }
+    })();
+  </script>
 </body>
 </html>
