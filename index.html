@@ -407,8 +407,8 @@
   <script src="js/zodiac.js"></script>
   <!-- Live2D 角色：JS + 模型全部走 CDN，file:// 直接打开可用 -->
   <script src="live2d/autoload.js"></script>
-  <!-- Twemoji — 统一跨平台 emoji 渲染 -->
-  <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js"></script>
+  <!-- Twemoji — 统一跨平台 emoji 渲染（本地部署，避免 HTTP 源 CORS/Private Network Access 拦截） -->
+  <script src="assets/twemoji.min.js"></script>
   <script>
     /* Twemoji 加载完成后解析页面中所有 emoji */
     (function check() {

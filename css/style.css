@@ -853,6 +853,16 @@ body {
   z-index: 2;
 }
 
+/* 加载中/缓冲中 — 脉动动画 */
+.music-label.loading {
+  animation: label-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes label-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+
 /* 音量区域 */
 .volume-wrap {
   display: flex;

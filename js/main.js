@@ -460,14 +460,24 @@
       var name = getDisplayName(index);
       musicLabel.textContent = name;
       musicLabel.title = name;
-      musicLabel.style.display = 'block'; // 首次播放时显示曲名
+      musicLabel.style.display = 'block';
+      musicLabel.classList.remove('loading');
+    }
+
+    // 曲名位置显示加载状态
+    function showLoadingLabel(msg) {
+      if (!musicLabel) return;
+      musicLabel.textContent = msg || '加载中…';
+      musicLabel.title = '';
+      musicLabel.style.display = 'block';
+      musicLabel.classList.add('loading');
     }
 
     function loadTrack(index) {
       currentIndex = index;
       var src = CONFIG.music.dir + encodeURIComponent(playlist[index]);
-      audio.src = src;
-      updateLabel(index);
+      audio.src = src;            // 会触发 loadstart → 自动显示加载中
+      showLoadingLabel();
       started = true;
     }
 
@@ -574,6 +584,24 @@
       play();
       notifySongChange();
     }
+
+    // === 加载状态 — 曲名位置显示加载中/缓冲中 ===
+    audio.addEventListener('loadstart', function () {
+      showLoadingLabel();
+    });
+
+    audio.addEventListener('canplay', function () {
+      updateLabel(currentIndex);
+    });
+
+    audio.addEventListener('waiting', function () {
+      // 播放过程中缓冲不足时显示
+      if (isPlaying) showLoadingLabel('缓冲中…');
+    });
+
+    audio.addEventListener('playing', function () {
+      updateLabel(currentIndex);
+    });
 
     // === 播放结束 ===
     audio.addEventListener('ended', playNext);
