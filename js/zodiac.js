@@ -53,6 +53,12 @@
 
   const FORTUNE_API = 'https://v2.xxapi.cn/api/horoscope';
 
+  // 页面可见性 — 切标签页时暂停星空 rAF
+  var _starPageVisible = true;
+  document.addEventListener('visibilitychange', function () {
+    _starPageVisible = !document.hidden;
+  });
+
   // ==================== 工具函数 ====================
 
   /** 根据月日获取星座 */
@@ -175,19 +181,12 @@
       piece.style.animationDelay = Math.random() * 1.5 + 's';
       piece.style.width = (6 + Math.random() * 10) + 'px';
       piece.style.height = (8 + Math.random() * 14) + 'px';
+      // 动画结束后自动移除 DOM，无需 setTimeout 批量清理
+      piece.addEventListener('animationend', function () { piece.remove(); });
       frag.appendChild(piece);
     }
 
     container.appendChild(frag);
-
-    // 动画结束后清理
-    setTimeout(function () {
-      if (container.children.length > 200) {
-        while (container.firstChild) {
-          container.removeChild(container.firstChild);
-        }
-      }
-    }, 5000);
   }
 
   // ==================== 3. 我的星座信息 ====================
@@ -225,6 +224,12 @@
     health: { fill: 'idx-health', pct: 'idx-health-pct' }
   };
 
+  /** 去除 API 返回文案末尾的"星座屋"字样（含各种混淆变体如星Q座Q屋、星^座^屋等） */
+  function stripSource(text) {
+    if (!text) return text;
+    return text.replace(/[，,。\.\s]*星.?\s*座.?\s*屋(原创)?$/g, '').trim();
+  }
+
   /** 渲染运势数据 */
   function renderFortune(data) {
     var sign = currentFortuneSign;
@@ -246,7 +251,7 @@
 
     // 概述
     var summary = (data.fortunetext && data.fortunetext.all) || data.shortcomment || '';
-    document.getElementById('fortune-summary').textContent = summary;
+    document.getElementById('fortune-summary').textContent = stripSource(summary);
 
     // 幸运信息
     document.getElementById('lucky-color').textContent = data.luckycolor || '—';
@@ -261,10 +266,10 @@
     // 详细运势
     var ft = data.fortunetext || {};
     var detailParts = [];
-    if (ft.health && ft.health.length > 2) detailParts.push('<p><strong>🩺 健康：</strong>' + ft.health + '</p>');
-    if (ft.love && ft.love.length > 2) detailParts.push('<p><strong>💕 爱情：</strong>' + ft.love + '</p>');
-    if (ft.work && ft.work.length > 2) detailParts.push('<p><strong>💼 工作：</strong>' + ft.work + '</p>');
-    if (ft.money && ft.money.length > 2) detailParts.push('<p><strong>💰 财富：</strong>' + ft.money + '</p>');
+    if (ft.health && ft.health.length > 2) detailParts.push('<p><strong>🩺 健康：</strong>' + stripSource(ft.health) + '</p>');
+    if (ft.love && ft.love.length > 2) detailParts.push('<p><strong>💕 爱情：</strong>' + stripSource(ft.love) + '</p>');
+    if (ft.work && ft.work.length > 2) detailParts.push('<p><strong>💼 工作：</strong>' + stripSource(ft.work) + '</p>');
+    if (ft.money && ft.money.length > 2) detailParts.push('<p><strong>💰 财富：</strong>' + stripSource(ft.money) + '</p>');
     document.getElementById('fortune-detail-text').innerHTML = detailParts.join('');
     /* Twemoji 重新解析 — 运势详情中的动态 emoji */
     if (window.twemoji) window.twemoji.parse(document.getElementById('fortune-detail-text'));
@@ -346,12 +351,8 @@
     var queryBtn = document.getElementById('query-btn');
     var resultDiv = document.getElementById('query-result');
 
-    // 填充月份
+    // 填充月份（HTML 已有占位项，清空后只加 1-12 月避免重复）
     var monthFrag = document.createDocumentFragment();
-    var optM = document.createElement('option');
-    optM.value = '';
-    optM.textContent = '月';
-    monthFrag.appendChild(optM);
     for (var m = 1; m <= 12; m++) {
       var opt = document.createElement('option');
       opt.value = m;
@@ -466,10 +467,23 @@
     var W, H;
     var particles = [];       // 自由粒子
     var cNodes = [];          // 星座节点
-    var ripples = [];         // 点击涟漪 [{x, y, birth, life}]
-    var RIPPLE_LIFE = 1500;   // 涟漪生命周期（ms）
-    var RIPPLE_RANGE = 250;   // 涟漪推开范围（px）
     var MAX_DIST = 150;       // 连线最大距离
+
+    // 星空连线 — 点击两个星星绘制金色连线
+    var selectedStar = null;   // {type: 'free'|'constellation', index: number}
+    var _selectTimer = null;
+    var connections = [];      // [{from, to, startTime, duration}]
+
+    function getStarPos(ref) {
+      if (!ref) return null;
+      if (ref.type === 'free') {
+        var p = particles[ref.index];
+        return p ? { x: p.cx, y: p.cy, r: p.r } : null;
+      } else {
+        var n = cNodes[ref.index];
+        return n ? { x: n.cx, y: n.cy, r: n.r } : null;
+      }
+    }
 
     function hash(seed) {
       var x = Math.sin(seed) * 43758.5453;
@@ -480,8 +494,9 @@
       particles = [];
       cNodes = [];
 
-      // 自由粒子（星空背景）
-      for (var i = 0; i < 200; i++) {
+      // 自由粒子（星空背景）— 移动端减半节省 GPU
+      var freeCount = window.innerWidth <= 768 ? 100 : 200;
+      for (var i = 0; i < freeCount; i++) {
         var s = hash(i * 71 + 13);
         var t = hash(i * 101 + 17);
         particles.push({
@@ -518,14 +533,7 @@
     }
 
     function update(timestamp) {
-      // 清理过期涟漪
-      for (var r = ripples.length - 1; r >= 0; r--) {
-        if (timestamp - ripples[r].birth > ripples[r].life) {
-          ripples.splice(r, 1);
-        }
-      }
-
-      // 自由粒子：布朗漂移 + 涟漪推开 + 弹簧回归
+      // 自由粒子：布朗漂移 + 弹簧回归
       for (var i = 0; i < particles.length; i++) {
         var p = particles[i];
         if (p.cx === 0 && p.cy === 0) { p.cx = p.rx * W; p.cy = p.ry * H; }
@@ -540,23 +548,6 @@
         var fx = (rx - p.cx) * 0.003;
         var fy = (ry - p.cy) * 0.003;
 
-        // 涟漪推开
-        for (var ri = 0; ri < ripples.length; ri++) {
-          var rp = ripples[ri];
-          var age = timestamp - rp.birth;
-          var lifeRatio = 1 - age / rp.life; // 1→0 衰减
-          if (lifeRatio <= 0) continue;
-          var dx = p.cx - rp.x;
-          var dy = p.cy - rp.y;
-          var dist = Math.sqrt(dx * dx + dy * dy);
-          var range = RIPPLE_RANGE * lifeRatio;
-          if (dist < range && dist > 0.1) {
-            var str = (1 - dist / range) * 4 * lifeRatio;
-            fx += (dx / dist) * str;
-            fy += (dy / dist) * str;
-          }
-        }
-
         p.vx += fx; p.vy += fy;
         p.vx *= 0.93; p.vy *= 0.93;
         p.cx += p.vx; p.cy += p.vy;
@@ -568,7 +559,7 @@
         if (p.cy > H + 10) p.vy -= 0.3;
       }
 
-      // 星座节点：涟漪推开 + 弹簧回归（无自主晃动，保持形状）
+      // 星座节点：弹簧回归（无自主晃动，保持形状）
       for (var j = 0; j < cNodes.length; j++) {
         var n = cNodes[j];
         if (n.cx === 0 && n.cy === 0) { n.cx = n.rx * W; n.cy = n.ry * H; }
@@ -576,23 +567,6 @@
         var nrx = n.rx * W, nry = n.ry * H;
         var nfx = (nrx - n.cx) * 0.0025;
         var nfy = (nry - n.cy) * 0.0025;
-
-        // 涟漪推开星座节点
-        for (var ri = 0; ri < ripples.length; ri++) {
-          var rp = ripples[ri];
-          var age = timestamp - rp.birth;
-          var lifeRatio = 1 - age / rp.life;
-          if (lifeRatio <= 0) continue;
-          var ndx = n.cx - rp.x;
-          var ndy = n.cy - rp.y;
-          var ndist = Math.sqrt(ndx * ndx + ndy * ndy);
-          var range = (RIPPLE_RANGE + 40) * lifeRatio;
-          if (ndist < range && ndist > 0.1) {
-            var nstr = (1 - ndist / range) * 3.5 * lifeRatio;
-            nfx += (ndx / ndist) * nstr;
-            nfy += (ndy / ndist) * nstr;
-          }
-        }
 
         n.vx += nfx; n.vy += nfy;
         n.vx *= 0.90; n.vy *= 0.90;
@@ -650,7 +624,45 @@
       }
       ctx.restore();
 
-      // 3. 自由粒子
+      // 3. 用户连线 — 金色光晕
+      for (var ci = connections.length - 1; ci >= 0; ci--) {
+        var conn = connections[ci];
+        var age = timestamp - conn.startTime;
+        if (age > conn.duration) { connections.splice(ci, 1); continue; }
+        var alpha = 1 - age / conn.duration;
+        var fromPos = getStarPos(conn.from);
+        var toPos = getStarPos(conn.to);
+        if (!fromPos || !toPos) continue;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = 'rgba(240, 192, 96, ' + (0.85 * alpha) + ')';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = 'rgba(240, 192, 96, ' + (0.5 * alpha) + ')';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(fromPos.x, fromPos.y);
+        ctx.lineTo(toPos.x, toPos.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 4. 当前选中星星 — 金色光环
+      if (selectedStar) {
+        var sel = getStarPos(selectedStar);
+        if (sel) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(240, 192, 96, 0.85)';
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = 'rgba(240, 192, 96, 0.6)';
+          ctx.shadowBlur = 14;
+          ctx.beginPath();
+          ctx.arc(sel.x, sel.y, sel.r + 7, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // 5. 自由粒子
       for (var k = 0; k < particles.length; k++) {
         var p = particles[k];
         var tw = 1 + Math.sin(timestamp * p.twinkleSpeed + p.twinkleOffset) * 0.2;
@@ -662,7 +674,7 @@
         ctx.fill();
       }
 
-      // 4. 星座节点（亮星更大光晕更亮）
+      // 6. 星座节点（亮星更大光晕更亮）
       for (var m = 0; m < cNodes.length; m++) {
         var nd = cNodes[m];
         var glowScale = nd.bright ? 5 : 4;
@@ -686,50 +698,79 @@
         ctx.fill();
       }
 
-      // 5. 涟漪光晕（点击位置渐隐）
-      ctx.save();
-      for (var ri = 0; ri < ripples.length; ri++) {
-        var rp = ripples[ri];
-        var age = timestamp - rp.birth;
-        var lifeRatio = 1 - age / rp.life;
-        if (lifeRatio <= 0) continue;
-        var rGlow = ctx.createRadialGradient(rp.x, rp.y, 0, rp.x, rp.y, RIPPLE_RANGE * lifeRatio);
-        rGlow.addColorStop(0, 'rgba(137, 196, 225, ' + (0.08 * lifeRatio) + ')');
-        rGlow.addColorStop(1, 'rgba(137, 196, 225, 0)');
-        ctx.beginPath();
-        ctx.arc(rp.x, rp.y, RIPPLE_RANGE * lifeRatio, 0, Math.PI * 2);
-        ctx.fillStyle = rGlow;
-        ctx.fill();
-      }
-      ctx.restore();
     }
 
     // ---- 主循环（单一路径，不套娃） ----
 
     function loop(ts) {
+      if (!_starPageVisible) { requestAnimationFrame(loop); return; }
       update(ts);
       draw(ts);
       requestAnimationFrame(loop);
     }
 
-    // ---- 点击涟漪推开粒子 ----
-    function addRipple(clientX, clientY) {
+    // ---- 星星连线 ----
+
+    /** 查找点击位置最近的星星（30px 范围内） */
+    function findNearestStar(clientX, clientY) {
       var rect = section.getBoundingClientRect();
-      ripples.push({
-        x: clientX - rect.left,
-        y: clientY - rect.top,
-        birth: performance.now(),
-        life: RIPPLE_LIFE,
-      });
+      var cx = clientX - rect.left;
+      var cy = clientY - rect.top;
+      var bestDist = 30;
+      var best = null;
+
+      for (var i = 0; i < particles.length; i++) {
+        var p = particles[i];
+        var dx = p.cx - cx, dy = p.cy - cy;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < bestDist) { bestDist = dist; best = { type: 'free', index: i }; }
+      }
+      for (var j = 0; j < cNodes.length; j++) {
+        var n = cNodes[j];
+        var dx = n.cx - cx, dy = n.cy - cy;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < bestDist) { bestDist = dist; best = { type: 'constellation', index: j }; }
+      }
+      return best;
     }
+
     section.addEventListener('click', function (e) {
-      addRipple(e.clientX, e.clientY);
+      handleStarClick(e.clientX, e.clientY);
     });
     section.addEventListener('touchstart', function (e) {
       if (e.touches.length > 0) {
-        addRipple(e.touches[0].clientX, e.touches[0].clientY);
+        handleStarClick(e.touches[0].clientX, e.touches[0].clientY);
       }
     }, { passive: true });
+
+    function handleStarClick(clientX, clientY) {
+      var star = findNearestStar(clientX, clientY);
+      if (!star) { selectedStar = null; clearTimeout(_selectTimer); return; }
+
+      if (selectedStar) {
+        // 第二次点击 → 创建连线
+        if (selectedStar.type === star.type && selectedStar.index === star.index) {
+          // 点击同一颗星 → 取消选中
+          selectedStar = null;
+          clearTimeout(_selectTimer);
+          return;
+        }
+        connections.push({
+          from: { type: selectedStar.type, index: selectedStar.index },
+          to:   { type: star.type, index: star.index },
+          startTime: performance.now(),
+          duration: 4000,
+        });
+        selectedStar = null;
+        clearTimeout(_selectTimer);
+      } else {
+        // 第一次点击 → 选中星星
+        selectedStar = star;
+        clearTimeout(_selectTimer);
+        // 3 秒后自动取消选中
+        _selectTimer = setTimeout(function () { selectedStar = null; }, 3000);
+      }
+    }
 
     function resize() {
       var dpr = window.devicePixelRatio || 1;
@@ -740,6 +781,9 @@
       canvas.style.width = W + 'px';
       canvas.style.height = H + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // 重置连线状态（粒子重新生成后旧引用失效）
+      selectedStar = null;
+      connections = [];
       generate();
     }
 
@@ -748,7 +792,7 @@
     window.addEventListener('resize', resize);
   }
 
-  // ==================== 7. 滚动渐进浮现（滚动位置实时驱动） ====================
+  // ==================== 7. 滚动渐进浮现（IntersectionObserver 驱动） ====================
 
   function initScrollBehavior() {
     var scrollHint = document.querySelector('.scroll-hint');
@@ -761,7 +805,7 @@
       });
     }
 
-    // ---- 滚动驱动浮现 ----
+    // ---- IntersectionObserver 驱动浮现（替代 scroll + rAF） ----
     var revealEls = document.querySelectorAll('.reveal-up');
     if (!revealEls.length) return;
 
@@ -774,52 +818,30 @@
       return 0;
     }
 
-    // 为每个元素预计算延迟
-    var items = [];
+    // 预设过渡 — 用 CSS 变量实现弹性入场
+    var transitionStyle = 'opacity 0.6s cubic-bezier(0.34,1.56,0.64,1), transform 0.6s cubic-bezier(0.34,1.56,0.64,1)';
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          var el = entry.target;
+          var delay = getDelay(el);
+          // 先设过渡再改变属性，确保动画触发
+          el.style.transition = transitionStyle;
+          // 用 setTimeout 实现交错延迟
+          setTimeout(function () {
+            el.style.opacity = '1';
+            el.style.transform = 'translateY(0)';
+          }, delay * 1000);
+          // 只触发一次，之后不再观察
+          observer.unobserve(el);
+        }
+      });
+    }, { threshold: 0.1 });
+
     for (var i = 0; i < revealEls.length; i++) {
-      items.push({ el: revealEls[i], delay: getDelay(revealEls[i]) });
+      observer.observe(revealEls[i]);
     }
-
-    var ticking = false;
-    function update() {
-      var vh = window.innerHeight;
-
-      for (var i = 0; i < items.length; i++) {
-        var item = items[i];
-        var rect = item.el.getBoundingClientRect();
-        var elTop = rect.top;
-
-        // 延迟量转为像素偏移（每 0.1s ≈ 0.05vh 偏移）
-        var staggerPx = item.delay * vh * 0.5;
-
-        // 动画区间：元素底边从视口底部进入 → 元素顶部到视口 30% 处完成
-        var start = vh + staggerPx;
-        var end = vh * 0.3 + staggerPx;
-        var range = start - end;
-
-        // 滚动进度 0→1（elTop 越小 = 越往上 = 进度越大）
-        var t = range > 0 ? (start - elTop) / range : 1;
-        t = t < 0 ? 0 : t > 1 ? 1 : t;
-
-        // ease-out 曲线让收尾更柔和
-        var eased = 1 - Math.pow(1 - t, 3);
-
-        item.el.style.opacity = String(eased);
-        item.el.style.transform = 'translateY(' + ((1 - eased) * 35) + 'px)';
-      }
-
-      ticking = false;
-    }
-
-    window.addEventListener('scroll', function () {
-      if (!ticking) {
-        requestAnimationFrame(update);
-        ticking = true;
-      }
-    }, { passive: true });
-
-    // 初始调用（处理首屏已可见的元素）
-    update();
   }
 
   // ==================== 启动 ====================

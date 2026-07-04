@@ -31,6 +31,20 @@
     },
   };
 
+  // ==================== 共享工具 ====================
+
+  /** ease-out cubic 缓动函数，用于音量淡入淡出等非 CSS 动画 */
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  // ==================== 页面可见性 — 切标签页时暂停 rAF 循环 ====================
+
+  var _pageVisible = true;
+  document.addEventListener('visibilitychange', function () {
+    _pageVisible = !document.hidden;
+  });
+
   // ==================== DOM 引用 ====================
 
   const canvas = document.getElementById('particles-canvas');
@@ -62,7 +76,6 @@
 
   // 鱼自主飞行状态
   let lastMouseActivity = 0;
-  let wanderAngle = Math.random() * Math.PI * 2;
   let wanderPhase = Math.random() * Math.PI * 2;
   let attractBlend = 0; // 0=漫游, 1=追逐光标
   let fishVelX = 0;     // 飞鱼当前速度（带惯性）
@@ -73,14 +86,24 @@
   let playMode = 2;           // 0=列表循环 1=单曲循环 2=随机（默认随机）
   let animationId = null;
 
-  // ==================== 共享 toast 提示 ====================
+  // ==================== 共享 toast 队列 ====================
 
+  var _toastQueue = [];
+  var _toastShowing = false;
   var _toastTimer = null;
 
   function showToast(msg, duration) {
+    _toastQueue.push({ msg: msg, duration: duration || 1800 });
+    if (!_toastShowing) _processToastQueue();
+  }
+
+  function _processToastQueue() {
+    if (_toastQueue.length === 0) { _toastShowing = false; return; }
+    _toastShowing = true;
+    var item = _toastQueue.shift();
     var toast = document.getElementById('toast');
-    if (!toast) return;
-    toast.textContent = msg;
+    if (!toast) { _toastShowing = false; return; }
+    toast.textContent = item.msg;
     /* Twemoji 重新解析 — 动态 emoji 跨平台统一渲染 */
     if (window.twemoji) window.twemoji.parse(toast);
     clearTimeout(_toastTimer);
@@ -91,7 +114,9 @@
     });
     _toastTimer = setTimeout(function () {
       toast.classList.remove('show');
-    }, duration || 1800);
+      /* 等 CSS 过渡完成（0.35s opacity + 0.45s transform）后再播下一条 */
+      setTimeout(_processToastQueue, 500);
+    }, item.duration);
   }
 
   function copyText(text, onSuccess) {
@@ -156,8 +181,12 @@
     }
 
     function createParticles() {
+      // 移动端（宽度 ≤768px）减半粒子数，节省 GPU 填充率
+      var count = window.innerWidth <= 768
+        ? Math.floor(CONFIG.particles.count * 0.5)
+        : CONFIG.particles.count;
       const arr = [];
-      for (let i = 0; i < CONFIG.particles.count; i++) {
+      for (let i = 0; i < count; i++) {
         arr.push(createParticle());
       }
       return arr;
@@ -205,6 +234,7 @@
     }
 
     function animate(time) {
+      if (!_pageVisible) { animationId = requestAnimationFrame(animate); return; }
       draw(time);
       animationId = requestAnimationFrame(animate);
     }
@@ -233,6 +263,8 @@
     var scaredUntil = 0;        // 受惊逃跑期间面朝远离光标方向
 
     function update() {
+      // 页面不可见时暂停更新，省 CPU
+      if (!_pageVisible) { requestAnimationFrame(update); return; }
       var now = Date.now();
       var idleMs = lastMouseActivity ? now - lastMouseActivity : Infinity;
 
@@ -544,14 +576,14 @@
     }
 
     function pause() {
-      // 淡出后暂停
-      fadeOutVolume(function () {
-        audio.pause();
-        musicBtn.classList.remove('playing');
-        if (vinylWrap) vinylWrap.classList.remove('spinning');
-        if (progressWrap) progressWrap.classList.remove('visible');
-        isPlaying = false;
-      });
+      // 立即暂停 + 更新 UI，淡出仅做音量平滑收尾（不阻塞响应）
+      audio.pause();
+      musicBtn.classList.remove('playing');
+      if (vinylWrap) vinylWrap.classList.remove('spinning');
+      if (progressWrap) progressWrap.classList.remove('visible');
+      isPlaying = false;
+      // 取消正在进行的淡入
+      if (fadeAnimId) { cancelAnimationFrame(fadeAnimId); fadeAnimId = null; }
     }
 
     function fadeInVolume() {
@@ -559,32 +591,11 @@
       var startTime = performance.now();
       function step(now) {
         var progress = Math.min((now - startTime) / CONFIG.music.fadeInMs, 1);
-        var eased = 1 - Math.pow(1 - progress, 3);
-        audio.volume = volume * eased;
+        audio.volume = volume * easeOutCubic(progress);
         if (progress < 1) {
           fadeAnimId = requestAnimationFrame(step);
         } else {
           fadeAnimId = null;
-        }
-      }
-      fadeAnimId = requestAnimationFrame(step);
-    }
-
-    function fadeOutVolume(callback) {
-      if (fadeAnimId) cancelAnimationFrame(fadeAnimId);
-      var startVol = audio.volume;
-      var startTime = performance.now();
-      var duration = 500;
-      function step(now) {
-        var progress = Math.min((now - startTime) / duration, 1);
-        var eased = 1 - Math.pow(1 - progress, 3);
-        audio.volume = startVol * (1 - eased);
-        if (progress < 1) {
-          fadeAnimId = requestAnimationFrame(step);
-        } else {
-          fadeAnimId = null;
-          audio.volume = 0;
-          if (callback) callback();
         }
       }
       fadeAnimId = requestAnimationFrame(step);
@@ -820,7 +831,84 @@
     updateVolumeUI(volume);
   }
 
-  // ==================== 4. 社交按钮提示 ====================
+  // ==================== 4. 云层鼠标视差 ====================
+
+  function initCloudParallax() {
+    var cloudsLayer = document.getElementById('clouds-layer');
+    if (!cloudsLayer) return;
+    var clouds = cloudsLayer.querySelectorAll('.cloud');
+
+    // 移动端跳过（触摸无 hover，且节省性能）
+    if (window.matchMedia('(max-width: 768px)').matches) return;
+
+    var centerX = window.innerWidth / 2;
+    var centerY = window.innerHeight / 2;
+
+    window.addEventListener('resize', function () {
+      centerX = window.innerWidth / 2;
+      centerY = window.innerHeight / 2;
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      // 鼠标相对于屏幕中心的偏移 → 云层反向微移（视差感）
+      var offsetX = (e.clientX - centerX) / centerX; // -1 ~ 1
+      var offsetY = (e.clientY - centerY) / centerY; // -1 ~ 1
+
+      // 不同层级的云移动幅度不同（远层小，近层大）
+      for (var i = 0; i < clouds.length; i++) {
+        var cloud = clouds[i];
+        var parent = cloud.parentElement;
+        var depth = 4; // 默认中层
+        if (parent.classList.contains('cloud-drift--far')) depth = 2;
+        else if (parent.classList.contains('cloud-drift--mid')) depth = 5;
+        else if (parent.classList.contains('cloud-drift--near')) depth = 8;
+
+        var dx = offsetX * depth;
+        var dy = offsetY * depth * 0.5; // 垂直方向减半，模拟水平主导的微风
+        cloud.style.transform = 'translate(' + dx.toFixed(1) + 'px, ' + dy.toFixed(1) + 'px)';
+      }
+    });
+  }
+
+  // ==================== 5. 深夜模式切换（自动 + 手动） ====================
+
+  var _nightManual = false; // 用户手动切换后覆盖自动检测，刷新页面恢复
+
+  function initNightMode() {
+    var btn = document.getElementById('theme-toggle');
+    var iconPath = btn ? btn.querySelector('path') : null;
+
+    var ICON_SUN = 'M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z';
+    var ICON_MOON = 'M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z';
+
+    function updateIcon() {
+      if (!iconPath) return;
+      var isNight = document.documentElement.classList.contains('night-mode');
+      iconPath.setAttribute('d', isNight ? ICON_MOON : ICON_SUN);
+    }
+
+    function update() {
+      if (_nightManual) return; // 手动模式覆盖自动
+      var hour = new Date().getHours();
+      var isNight = hour >= 19 || hour < 6;
+      document.documentElement.classList.toggle('night-mode', isNight);
+      updateIcon();
+    }
+
+    if (btn) {
+      btn.addEventListener('click', function () {
+        _nightManual = true;
+        document.documentElement.classList.toggle('night-mode');
+        updateIcon();
+      });
+    }
+
+    update();
+    // 每分钟检查一次
+    setInterval(update, 60000);
+  }
+
+  // ==================== 6. 社交按钮提示 ====================
 
   function initSocialButtons() {
     var emailBtn = document.getElementById('email-btn');
@@ -856,8 +944,10 @@
   // ==================== 启动 ====================
 
   function init() {
+    initNightMode();
     initParticles();
     initParallax();
+    initCloudParallax();
     initMusic();
     initSocialButtons();
   }
