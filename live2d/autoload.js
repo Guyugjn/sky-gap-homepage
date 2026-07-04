@@ -193,33 +193,52 @@ function loadExternalResource(url, type) {
   });
 }
 
-(async () => {
-  console.log('[Live2D] 初始化开始…');
+  // ============================================================
+  // Live2D 延迟初始化：等页面核心内容加载完毕后再启动，
+  // 避免 Live2D 的 127K JS + 2.6MB 纹理与首屏资源抢带宽。
+  // 移动端直接跳过，不加载任何 Live2D 资源。
+  // ============================================================
 
-  // 移动端跳过加载
-  if (screen.width < 768) { console.log('[Live2D] 移动端，跳过加载'); return; }
+  console.log('[Live2D] 等待页面就绪后初始化…');
 
-  try {
-    // waifu.css 本地，waifu-tips.js CDN（ES 模块，HTTPS 无 CORS 问题）
-    console.log('[Live2D] 加载模块（CDN + 本地）…');
-    await Promise.all([
-      loadExternalResource(live2d_path + 'waifu.css', 'css'),
-      loadExternalResource(cdn_js + 'waifu-tips.js', 'js')
-    ]);
-    console.log('[Live2D] 模块加载完成，初始化组件…');
+  function initLive2D() {
+    if (screen.width < 768) {
+      console.log('[Live2D] 移动端，跳过加载');
+      return;
+    }
 
-    initWidget({
-      waifuPath: waifuBlobUrl,           // 内联 JSON → Blob URL，绕过 fetch
-      cubism2Path: live2d_path + 'live2d.min.js',  // 本地 SDK
-      tools: [],
-      logLevel: 'warn',
-      drag: false,
-    });
-    console.log('[Live2D] initWidget 调用完成');
-  } catch (err) {
-    console.error('[Live2D] 初始化失败:', err);
+    (async () => {
+      console.log('[Live2D] 开始加载…');
+      try {
+        // waifu.css 本地，waifu-tips.js CDN（ES 模块，HTTPS 无 CORS 问题）
+        console.log('[Live2D] 加载模块（CDN + 本地）…');
+        await Promise.all([
+          loadExternalResource(live2d_path + 'waifu.css', 'css'),
+          loadExternalResource(cdn_js + 'waifu-tips.js', 'js')
+        ]);
+        console.log('[Live2D] 模块加载完成，初始化组件…');
+
+        initWidget({
+          waifuPath: waifuBlobUrl,           // 内联 JSON → Blob URL，绕过 fetch
+          cubism2Path: live2d_path + 'live2d.min.js',  // 本地 SDK
+          tools: [],
+          logLevel: 'warn',
+          drag: false,
+        });
+        console.log('[Live2D] initWidget 调用完成');
+      } catch (err) {
+        console.error('[Live2D] 初始化失败:', err);
+      }
+    })();
   }
-})();
+
+  // requestIdleCallback：浏览器空闲时执行，不阻塞首屏渲染
+  // 降级方案：2 秒后执行（保证 Live2D 最终一定会加载）
+  if (window.requestIdleCallback) {
+    requestIdleCallback(initLive2D, { timeout: 4000 });
+  } else {
+    setTimeout(initLive2D, 2000);
+  }
 
 console.log(
   '\n%cLive2D%cWidget%c\n',

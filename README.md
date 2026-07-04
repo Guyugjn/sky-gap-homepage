@@ -14,9 +14,10 @@
 - **星座星空** — 7 个真实星座的粒子网络星图，弹簧物理 + 涟漪推开 + 自主微晃
 - **生日倒计时** — 精确到秒，生日当天彩带特效
 - **每日运势** — 今日/本周/本月/年度运势，访客可输入生日查询星座并自动切换运势
-- **云层漂移** — 纯 CSS 远/中/近三层云朵以不同速度飘过
-- **唱片音乐播放器** — 旋转唱片 + 三种播放模式 + 淡入淡出切歌
-- **Live2D 看板娘** — Pio/Izumi 双模型，对话气泡与页面元素联动
+- **云层漂移** — 纯 CSS 远/中/近三层云朵以不同速度漂过，无 JS 参与
+- **唱片音乐播放器** — 旋转唱片 + 三种播放模式 + 淡入淡出切歌 + 智能预加载（等当前曲目缓冲足够后才下载下一首）+ 慢网加载状态提示
+- **Live2D 看板娘** — Pio/Izumi 双模型，延迟初始化（不抢首屏带宽），对话气泡与页面元素联动
+- **Twemoji 跨平台 emoji** — 本地部署 Twemoji v14.0.2，统一 Windows/macOS/iOS 的 emoji 风格
 
 ## 技术栈
 
@@ -25,10 +26,12 @@
 | 层级 | 实现 |
 |------|------|
 | 结构 | HTML5 语义化标签 |
-| 样式 | 纯 CSS，CSS 变量统一色调，毛玻璃卡片 |
+| 样式 | 纯 CSS，CSS 变量统一色调，毛玻璃卡片，刘海屏安全区适配 |
 | 字体 | Ma Shan Zheng（毛笔展示体），系统无衬线正文 |
 | 动画 | Canvas 2D（粒子星图）、CSS @keyframes（云层/唱片/涟漪）、requestAnimationFrame（飞鱼） |
 | 滚动 | JS 滚动位置驱动浮现动画，逐像素双向渐入渐出 |
+| Emoji | Twemoji v14.0.2 本地部署，跨平台统一渲染 |
+| 加载 | 脚本全部 `defer` 并行下载，Live2D `requestIdleCallback` 延迟初始化，智能音乐预加载 |
 | 数据 | xxapi.cn 星座运势 API，Python 脚本生成音乐播放列表 |
 
 ## 本地运行
@@ -38,6 +41,8 @@ git clone https://github.com/Guyugjn/sky-gap-homepage.git
 ```
 
 浏览器直接打开 `index.html`，无需构建。
+
+> **IIS 部署注意**：`live2d/web.config` 注册了 `.moc` / `.mtn` 的 MIME 类型，`web.config`（根目录）设置了 7 天静态资源缓存。非 IIS 服务器可忽略这两个文件。
 
 ## 音乐管理
 
@@ -54,8 +59,9 @@ css/style.css           — 全局样式、设计系统、动画
 js/main.js              — 飞鱼、音乐播放器、交互逻辑
 js/zodiac.js            — 星座模块（倒计时/运势/星图/浮现）
 generate_playlist.py    — 扫描 assets/music/ 生成播放列表
+web.config              — IIS 静态资源缓存（7 天）
 live2d/
-  autoload.js           — Live2D 加载器（内联对话配置，自动适配 file:///HTTP）
+  autoload.js           — Live2D 加载器（内联对话配置，延迟初始化）
   live2d.min.js         — Cubism 2 Core SDK
   waifu.css             — 看板娘样式
   web.config            — IIS MIME 类型（.moc/.mtn）
@@ -65,6 +71,7 @@ live2d/
 assets/
   avatar.jpg            — 头像
   favicon.svg           — 标签页图标
+  twemoji.min.js        — Twemoji v14.0.2 本地副本
   music/                — mp3 文件 + playlist.js
 ```
 

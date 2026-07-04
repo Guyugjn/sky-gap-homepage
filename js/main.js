@@ -452,18 +452,37 @@
     preloadAudio.preload = 'auto';
     preloadAudio.volume = 0;
     preloadAudio.muted = true; // 静音预加载，避免意外出声
+    var preloadDone = false;   // 本轮是否已完成预加载，避免 progress 事件重复触发
 
     function preloadNextTrack() {
       if (!totalTracks || totalTracks <= 1) return;
-      var nextIdx;
       if (playMode === 1) return;           // 单曲循环：不需要预加载
+      var nextIdx;
       if (playMode === 0) {
         nextIdx = (currentIndex + 1) % totalTracks;  // 列表循环：下一首
       } else {
-        nextIdx = randomIndex();            // 随机：预载一首，虽不能保证命中但能充实缓存
+        nextIdx = randomIndex();            // 随机：预载一首
       }
+      // 先清空再赋值：取消旧预加载请求，避免多首 mp3 并行下载抢带宽
+      preloadAudio.src = '';
       preloadAudio.src = CONFIG.music.dir + encodeURIComponent(playlist[nextIdx]);
+      preloadDone = true;
     }
+
+    // 智能预加载：等当前曲目缓冲足够后才开始下载下一首
+    // 避免慢网速下两首 mp3（各 2-8MB）同时下载互相抢带宽导致卡顿
+    audio.addEventListener('progress', function () {
+      if (preloadDone || !isPlaying || !audio.duration) return;
+      if (audio.buffered.length === 0) return;
+      var bufferedEnd = audio.buffered.end(audio.buffered.length - 1);
+      // 缓冲超过 30 秒或超过 40% → 当前曲目已经稳定，可以放心预加载
+      if (bufferedEnd > 30 || bufferedEnd / audio.duration > 0.4) {
+        preloadNextTrack();
+      }
+    });
+
+    // 拖动进度条后重新评估缓冲状态
+    audio.addEventListener('seeking', function () { preloadDone = false; });
 
     // === 工具函数 ===
 
@@ -494,8 +513,8 @@
     function loadTrack(index) {
       currentIndex = index;
       var src = CONFIG.music.dir + encodeURIComponent(playlist[index]);
-      audio.src = src;            // 会触发 loadstart → 自动显示加载中
-      showLoadingLabel();
+      audio.src = src;            // 赋值 src 会自动触发 loadstart 事件，事件中已调用 showLoadingLabel()
+      preloadDone = false;       // 新曲目重置，等缓冲够了再预加载
       started = true;
     }
 
@@ -516,9 +535,10 @@
         isPlaying = true;
         if (progressWrap) progressWrap.classList.add('visible');
         fadeInVolume();
-        preloadNextTrack(); // 后台预加载下一首
+        preloadDone = false; // 等缓冲够了再自动预加载下一首
       }).catch(function (err) {
         console.warn('播放失败：', err.message);
+        updateLabel(currentIndex); // 清除"加载中…"状态
         showToast('⚠️ 播放失败，请检查网络或点击重试', 2500);
       });
     }
@@ -570,13 +590,18 @@
       fadeAnimId = requestAnimationFrame(step);
     }
 
+    var playHistory = []; // 随机模式播放历史栈，支持"上一首"回到真正听过的曲目
+
     // === 切歌逻辑 ===
 
     function playPrev() {
       if (playMode === 2) {
-        // 随机模式：回到上一首随机曲目（用 history）
-        currentIndex = Math.max(0, currentIndex - 1);
-        if (currentIndex < 0) currentIndex = totalTracks - 1;
+        // 随机模式：从历史栈弹出上一首真正播放过的曲目
+        if (playHistory.length === 0) {
+          showToast('没有更早的播放记录了', 1500);
+          return;
+        }
+        currentIndex = playHistory.pop();
       } else {
         currentIndex = (currentIndex - 1 + totalTracks) % totalTracks;
       }
@@ -593,7 +618,8 @@
         return;
       }
       if (playMode === 2) {
-        // 随机
+        // 随机：记录当前曲目到历史，再随机选下一首
+        playHistory.push(currentIndex);
         currentIndex = randomIndex();
       } else {
         // 列表循环
@@ -707,9 +733,10 @@
 
     modeBtn.addEventListener('click', function () {
       playMode = (playMode + 1) % 3;
+      playHistory = []; // 切换模式时清空随机历史
       updateModeUI();
-      // 模式切换后重新预加载正确的下一首
-      if (isPlaying) preloadNextTrack();
+      // 模式切换后重置预加载标记，让 progress 事件按新模式重新触发
+      if (isPlaying) { preloadDone = false; preloadAudio.src = ''; }
     });
 
     // === 点击唱片复制曲名 ===

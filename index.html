@@ -7,8 +7,17 @@
   <link rel="icon" href="assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Live2D CDN 预连接：后续加载模型时省去 DNS + TCP + TLS 往返 -->
+  <link rel="preconnect" href="https://fastly.jsdelivr.net">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
+  <script defer src="assets/music/playlist.js"></script>
+  <script defer src="js/main.js"></script>
+  <script defer src="js/zodiac.js"></script>
+  <script defer src="live2d/autoload.js"></script>
+  <script defer src="assets/twemoji.min.js"></script>
 </head>
 <body>
   <!-- 天空渐变背景 -->
@@ -100,6 +109,9 @@
         alt="GY的头像"
         class="avatar"
         id="avatar"
+        width="180"
+        height="180"
+        fetchpriority="high"
         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
       >
       <div class="avatar-placeholder" style="display:none;">
@@ -402,13 +414,6 @@
   <!-- 复制提示气泡 -->
   <div class="toast" id="toast">📋 邮箱已复制</div>
 
-  <script src="assets/music/playlist.js"></script>
-  <script src="js/main.js"></script>
-  <script src="js/zodiac.js"></script>
-  <!-- Live2D 角色：JS + 模型全部走 CDN，file:// 直接打开可用 -->
-  <script src="live2d/autoload.js"></script>
-  <!-- Twemoji — 统一跨平台 emoji 渲染（本地部署，避免 HTTP 源 CORS/Private Network Access 拦截） -->
-  <script src="assets/twemoji.min.js"></script>
   <script>
     /* Twemoji 加载完成后解析页面中所有 emoji */
     (function check() {
