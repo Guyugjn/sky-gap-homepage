@@ -11,7 +11,7 @@
   const CONFIG = {
     music: {
       dir: 'assets/music/',    // 音乐目录
-      startVolume: 0.05,       // 初始音量
+      startVolume: 0.20,       // 初始音量
       fadeInMs: 2000,          // 淡入时长（毫秒）
     },
     particles: {
@@ -447,6 +447,24 @@
     audio.setAttribute('playsinline', '');
     audio.setAttribute('webkit-playsinline', '');
 
+    // 预加载用的隐藏音频元素，提前下载下一首
+    var preloadAudio = new Audio();
+    preloadAudio.preload = 'auto';
+    preloadAudio.volume = 0;
+    preloadAudio.muted = true; // 静音预加载，避免意外出声
+
+    function preloadNextTrack() {
+      if (!totalTracks || totalTracks <= 1) return;
+      var nextIdx;
+      if (playMode === 1) return;           // 单曲循环：不需要预加载
+      if (playMode === 0) {
+        nextIdx = (currentIndex + 1) % totalTracks;  // 列表循环：下一首
+      } else {
+        nextIdx = randomIndex();            // 随机：预载一首，虽不能保证命中但能充实缓存
+      }
+      preloadAudio.src = CONFIG.music.dir + encodeURIComponent(playlist[nextIdx]);
+    }
+
     // === 工具函数 ===
 
     // 从文件名获取显示曲名（去掉 .mp3 后缀）
@@ -498,6 +516,7 @@
         isPlaying = true;
         if (progressWrap) progressWrap.classList.add('visible');
         fadeInVolume();
+        preloadNextTrack(); // 后台预加载下一首
       }).catch(function (err) {
         console.warn('播放失败：', err.message);
         showToast('⚠️ 播放失败，请检查网络或点击重试', 2500);
@@ -689,6 +708,8 @@
     modeBtn.addEventListener('click', function () {
       playMode = (playMode + 1) % 3;
       updateModeUI();
+      // 模式切换后重新预加载正确的下一首
+      if (isPlaying) preloadNextTrack();
     });
 
     // === 点击唱片复制曲名 ===
