@@ -247,6 +247,15 @@ function loadExternalResource(url, type) {
   function initLive2D() {
     if (screen.width < 768) { return; }
 
+    // 静默 Live2D 初始化期间的 hitTest 竞态错误（纹理未就绪时鼠标事件触发）
+    window.addEventListener('error', function suppressLive2DRace(e) {
+      if (e.message && e.message.includes('hitTest')) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        return false;
+      }
+    }, true);
+
     (async () => {
       try {
         await Promise.all([
