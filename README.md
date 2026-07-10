@@ -16,9 +16,9 @@
 - **每日运势** — 今日/本周/本月/年度运势，访客可输入生日查询星座并自动切换运势
 - **日夜模式** — 19:00–06:00 自动切换深蓝夜空配色，支持手动切换（太阳/月亮 SVG 按钮）
 - **云层漂移** — 纯 CSS 远/中/近三层云朵以不同速度漂过，鼠标视差微移
-- **唱片音乐播放器** — 旋转黑胶唱片 + 三种播放模式 + 淡入切歌 + 智能预加载 + 点击复制曲名
-- **Live2D 看板娘** — Pio/Izumi 双模型，延迟初始化（不抢首屏带宽），对话气泡与页面元素联动
-- **Twemoji 跨平台 emoji** — 本地部署 Twemoji v14.0.2，统一 Windows/macOS/iOS 的 emoji 风格
+- **音乐播放器** — 自定义进度条/音量条拖拽（同款系统），三种播放模式，淡入切歌，智能预加载，点击复制曲名
+- **Live2D 看板娘** — Pio/Izumi 双模型，延迟初始化（不抢首屏带宽），120+ 条对话气泡与页面元素联动
+- **Twemoji 跨平台 emoji** — Twemoji v17.0.3，优先 jsdelivr CDN，加载失败自动降级本地 72x72 PNG（4009 张）
 
 ## 技术栈
 
@@ -29,11 +29,11 @@
 | 结构 | HTML5 语义化标签 |
 | 样式 | 纯 CSS，CSS 变量统一色调，毛玻璃卡片，刘海屏安全区适配 |
 | 字体 | Ma Shan Zheng（毛笔展示体），系统无衬线正文 |
-| 动画 | Canvas 2D（粒子星图/连线）、CSS @keyframes（云层/唱片/涟漪/彩带）、requestAnimationFrame（飞鱼/星空） |
+| 动画 | Canvas 2D（粒子星图/连线）、CSS @keyframes（云层/涟漪/彩带）、requestAnimationFrame（飞鱼/星空） |
 | 滚动 | IntersectionObserver 驱动卡片浮现，弹性入场动画 |
 | 日夜 | CSS 变量一键切换，3s 渐变过渡，自动 + 手动双模式 |
-| Emoji | Twemoji v14.0.2 本地部署，跨平台统一渲染 |
-| 加载 | 脚本全部 `defer` 并行下载，Live2D `requestIdleCallback` 延迟初始化，智能音乐预加载 |
+| Emoji | Twemoji v17.0.3，CDN 优先 + 本地 72x72 降级，跨平台统一渲染 |
+| Load | 脚本全部 `defer` 并行下载，Live2D `requestIdleCallback` 延迟初始化，智能音乐预加载 |
 | 数据 | xxapi.cn 星座运势 API，Python 脚本生成音乐播放列表 |
 
 ## 本地运行
@@ -56,14 +56,14 @@ python generate_playlist.py
 ## 项目结构
 
 ```
-index.html              — 页面结构
+index.html              — 页面结构（含 SEO / Twemoji 初始化）
 css/style.css           — 全局样式、设计系统、动画
 js/main.js              — 飞鱼、音乐播放器、交互逻辑
 js/zodiac.js            — 星座模块（倒计时/运势/星图/浮现）
 generate_playlist.py    — 扫描 assets/music/ 生成播放列表
 web.config              — IIS 静态资源缓存（7 天）
 live2d/
-  autoload.js           — Live2D 加载器（内联对话配置，延迟初始化）
+  autoload.js           — Live2D 加载器（内联 120+ 条对话配置，延迟初始化）
   live2d.min.js         — Cubism 2 Core SDK
   waifu.css             — 看板娘样式
   web.config            — IIS MIME 类型（.moc/.mtn）
@@ -72,9 +72,10 @@ live2d/
     izumi/              — 和泉 Izumi 角色模型
 assets/
   avatar.jpg            — 头像
-  favicon.svg           — 标签页图标
-  twemoji.min.js        — Twemoji v14.0.2 本地副本
-  music/                — mp3 文件 + playlist.js
+  favicon.svg           — 标签页图标（淡蓝圆底 + 小鱼）
+  twemoji.min.js        — Twemoji v17.0.3（17KB）
+  twemoji-72x72/        — Twemoji 72x72 PNG 图片（4009 张，CDN 降级备用，不上传 git）
+  music/                — mp3 文件（63 首）+ playlist.js
 ```
 
 ## 协议
@@ -85,4 +86,4 @@ Live2D 看板娘使用 [live2d-widget](https://github.com/stevenjoezhang/live2d-
 
 ---
 
-*由 Claude Code 和 DeepSeek 辅助设计*
+*由 Claude Code 辅助设计*

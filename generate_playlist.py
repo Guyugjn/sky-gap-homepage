@@ -26,7 +26,7 @@ def main():
         key=natural_key,
     )
 
-    # 写入为全局 JS 变量，浏览器直接通过 <script> 标签加载
+    # 写入为全局 JS 变量，确保不使用智能引号（JSON 规范只认直双引号）
     with open(OUTPUT, 'w', encoding='utf-8') as f:
         f.write('window.__PLAYLIST__ = ')
         json.dump(files, f, ensure_ascii=False)

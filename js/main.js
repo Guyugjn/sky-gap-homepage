@@ -57,9 +57,9 @@
   const prevBtn = document.getElementById('prev-btn');
   const nextBtn = document.getElementById('next-btn');
   const volumeBtn = document.getElementById('volume-btn');
-  const volumeSlider = document.getElementById('volume-slider');
+  const volumeBar = document.getElementById('volume-bar');
+  const volumeFill = document.getElementById('volume-fill');
   const volumeIcon = document.getElementById('volume-icon');
-  const progressWrap = document.querySelector('.progress-wrap');
   const progressBar = document.getElementById('progress-bar');
   const progressFill = document.getElementById('progress-fill');
   const timeCurrent = document.getElementById('time-current');
@@ -531,6 +531,7 @@
       musicLabel.title = name;
       musicLabel.style.display = 'block';
       musicLabel.classList.remove('loading');
+      musicLabel.classList.add('playing');
     }
 
     // 曲名位置显示加载状态
@@ -540,6 +541,7 @@
       musicLabel.title = '';
       musicLabel.style.display = 'block';
       musicLabel.classList.add('loading');
+      musicLabel.classList.remove('playing');
     }
 
     function loadTrack(index) {
@@ -548,6 +550,10 @@
       audio.src = src;            // 赋值 src 会自动触发 loadstart 事件，事件中已调用 showLoadingLabel()
       preloadDone = false;       // 新曲目重置，等缓冲够了再预加载
       started = true;
+      // 曲名气泡提示仅在播放后显示
+      if (musicLabel && musicLabel.parentElement) {
+        musicLabel.parentElement.classList.add('show-tip');
+      }
     }
 
     // 随机选曲
@@ -555,7 +561,6 @@
       return Math.floor(Math.random() * totalTracks);
     }
 
-    var vinylWrap = document.querySelector('.vinyl-wrap');
     var fadeAnimId = null; // 当前淡入/淡出动画 ID
 
     function play() {
@@ -563,9 +568,7 @@
       if (fadeAnimId) { cancelAnimationFrame(fadeAnimId); fadeAnimId = null; }
       audio.play().then(function () {
         musicBtn.classList.add('playing');
-        if (vinylWrap) vinylWrap.classList.add('spinning');
         isPlaying = true;
-        if (progressWrap) progressWrap.classList.add('visible');
         fadeInVolume();
         preloadDone = false; // 等缓冲够了再自动预加载下一首
       }).catch(function (err) {
@@ -579,8 +582,6 @@
       // 立即暂停 + 更新 UI，淡出仅做音量平滑收尾（不阻塞响应）
       audio.pause();
       musicBtn.classList.remove('playing');
-      if (vinylWrap) vinylWrap.classList.remove('spinning');
-      if (progressWrap) progressWrap.classList.remove('visible');
       isPlaying = false;
       // 取消正在进行的淡入
       if (fadeAnimId) { cancelAnimationFrame(fadeAnimId); fadeAnimId = null; }
@@ -675,10 +676,14 @@
       if (timeTotal) timeTotal.textContent = formatTime(audio.duration);
     });
 
+    var progressSeeking = false; // 用户拖拽中暂停 timeupdate 回写
+
     audio.addEventListener('timeupdate', function () {
       if (!audio.duration) return;
-      var pct = (audio.currentTime / audio.duration) * 100;
-      if (progressFill) progressFill.style.width = pct + '%';
+      if (!progressSeeking) {
+        var pct = (audio.currentTime / audio.duration) * 100;
+        if (progressFill) progressFill.style.width = pct + '%';
+      }
       if (timeCurrent) timeCurrent.textContent = formatTime(audio.currentTime);
     });
 
@@ -691,35 +696,36 @@
         var rect = progressBar.getBoundingClientRect();
         var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
         var pct = Math.max(0, Math.min(1, x / rect.width));
+        progressSeeking = true;
         audio.currentTime = pct * audio.duration;
         progressFill.style.width = (pct * 100) + '%';
       }
 
       progressBar.addEventListener('mousedown', function (e) {
+        e.preventDefault();
         dragging = true;
         seekFromEvent(e);
       });
+
+      progressBar.addEventListener('touchstart', function (e) {
+        dragging = true;
+        seekFromEvent(e);
+      }, { passive: false });
 
       document.addEventListener('mousemove', function (e) {
         if (dragging) seekFromEvent(e);
       });
 
-      document.addEventListener('mouseup', function () {
-        dragging = false;
-      });
-
-      // 触摸支持
-      progressBar.addEventListener('touchstart', function (e) {
-        dragging = true;
-        seekFromEvent(e);
-      });
-
       document.addEventListener('touchmove', function (e) {
         if (dragging) seekFromEvent(e);
+      }, { passive: false });
+
+      document.addEventListener('mouseup', function () {
+        if (dragging) { dragging = false; progressSeeking = false; }
       });
 
       document.addEventListener('touchend', function () {
-        dragging = false;
+        if (dragging) { dragging = false; progressSeeking = false; }
       });
     }
 
@@ -750,10 +756,9 @@
       if (isPlaying) { preloadDone = false; preloadAudio.src = ''; }
     });
 
-    // === 点击唱片复制曲名 ===
-    if (vinylWrap) {
-      vinylWrap.style.cursor = 'pointer';
-      vinylWrap.addEventListener('click', function (e) {
+    // === 点击曲名复制曲名 ===
+    if (musicLabel) {
+      musicLabel.addEventListener('click', function (e) {
         e.stopPropagation();
         if (!started) return;
         copyText(getDisplayName(currentIndex), function () {
@@ -765,31 +770,53 @@
     // === 音量控制 ===
     function updateVolumeUI(vol) {
       var pct = Math.round(vol * 100);
-      if (volumeSlider) volumeSlider.value = pct;
+      if (volumeFill) volumeFill.style.width = pct + '%';
       if (volumePct) volumePct.textContent = pct + '%';
       updateVolumeIcon(vol);
     }
 
-    volumeSlider.addEventListener('input', function () {
-      volume = parseInt(this.value) / 100;
-      audio.volume = volume;
-      if (volumePct) volumePct.textContent = this.value + '%';
-      updateVolumeIcon(volume);
-    });
+    // 自定义拖拽（和进度条同样的系统）
+    if (volumeBar) {
+      var volDragging = false;
 
-    volumeBtn.addEventListener('click', function () {
-      if (volume > 0.005) {
-        volumeSlider.dataset.prev = volume;
-        volume = 0;
-        audio.volume = 0;
-        updateVolumeUI(0);
-      } else {
-        var prev = parseFloat(volumeSlider.dataset.prev) || CONFIG.music.startVolume;
-        volume = prev;
+      function volSeekFromEvent(e) {
+        var rect = volumeBar.getBoundingClientRect();
+        var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        var pct = Math.max(0, Math.min(1, x / rect.width));
+        volume = pct;
         audio.volume = volume;
-        updateVolumeUI(prev);
+        volumeFill.style.width = (pct * 100) + '%';
+        if (volumePct) volumePct.textContent = Math.round(pct * 100) + '%';
+        updateVolumeIcon(volume);
       }
-    });
+
+      volumeBar.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        volDragging = true;
+        volSeekFromEvent(e);
+      });
+
+      volumeBar.addEventListener('touchstart', function (e) {
+        volDragging = true;
+        volSeekFromEvent(e);
+      }, { passive: false });
+
+      document.addEventListener('mousemove', function (e) {
+        if (volDragging) volSeekFromEvent(e);
+      });
+
+      document.addEventListener('touchmove', function (e) {
+        if (volDragging) volSeekFromEvent(e);
+      }, { passive: false });
+
+      document.addEventListener('mouseup', function () {
+        volDragging = false;
+      });
+
+      document.addEventListener('touchend', function () {
+        volDragging = false;
+      });
+    }
 
     function updateVolumeIcon(vol) {
       if (!volumeIcon) return;
@@ -803,6 +830,21 @@
       }
       volumeIcon.querySelector('path').setAttribute('d', path);
     }
+
+    // 音量按钮：点击切换静音/恢复
+    var volumePrev = volume; // 用于静音后恢复
+    volumeBtn.addEventListener('click', function () {
+      if (volume > 0.005) {
+        volumePrev = volume;
+        volume = 0;
+        audio.volume = 0;
+        updateVolumeUI(0);
+      } else {
+        volume = volumePrev || CONFIG.music.startVolume;
+        audio.volume = volume;
+        updateVolumeUI(volume);
+      }
+    });
 
     // === 按钮事件 ===
     musicBtn.addEventListener('click', function () {

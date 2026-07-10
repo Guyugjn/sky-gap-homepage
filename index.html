@@ -183,48 +183,47 @@
       </div>
     </div>
 
-    <!-- 音乐播放器 -->
+    <!-- 音乐播放器 — iOS 控制中心风格 -->
     <div class="music-player" id="music-player">
-      <div class="tip-wrap">
-        <div class="vinyl-wrap">
-          <span class="float-note float-note--1">♪</span>
-          <span class="float-note float-note--2">♫</span>
-          <span class="float-note float-note--3">♪</span>
-          <div class="vinyl-disc" id="vinyl-disc">
-            <div class="vinyl-label">
-              <span class="vinyl-note">♪</span>
-            </div>
-          </div>
-        </div>
-        <span class="social-tip">点击复制曲名</span>
+      <!-- 第一行：曲名 -->
+      <div class="music-label-wrap">
+        <span class="music-label" id="music-label">来放一首音乐吧 🎵</span>
+        <span class="social-tip" id="music-tip">点击复制曲名</span>
       </div>
-      <span class="music-label" id="music-label">BGM</span>
-      <button class="music-btn music-btn--sm" id="prev-btn" title="上一首">
-        <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-      </button>
-      <button class="music-btn" id="music-btn" aria-label="播放 / 暂停">
-        <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-play"><path d="M8 5v14l11-7z"/></svg>
-        <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-pause"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-      </button>
-      <button class="music-btn music-btn--sm" id="next-btn" title="下一首">
-        <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-      </button>
-      <div class="mode-wrap">
-        <button class="music-btn music-btn--sm" id="mode-btn">
-          <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M7 7h10v2H7V7zm0 4h7v2H7v-2zm11-4h-2v6l-1.5-1.5-1.41 1.41L17 17l3.91-3.91-1.41-1.41L18 13.18V7z"/></svg>
+
+      <!-- 第二行：上一首 · 播放/暂停 · 下一首 -->
+      <div class="music-controls">
+        <button class="music-btn music-btn--sm" id="prev-btn" title="上一首">
+          <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
         </button>
-        <span class="mode-tip" id="mode-tip">列表循环</span>
+        <button class="music-btn" id="music-btn" aria-label="播放 / 暂停">
+          <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-play"><path d="M8 5v14l11-7z"/></svg>
+          <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-pause"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+        <button class="music-btn music-btn--sm" id="next-btn" title="下一首">
+          <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
       </div>
+
+      <!-- 第三行：进度条 -->
       <div class="progress-wrap">
         <span class="time-label" id="time-current">0:00</span>
         <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
         <span class="time-label" id="time-total">0:00</span>
       </div>
-      <div class="volume-wrap">
+
+      <!-- 第四行：随机播放 + 音量 -->
+      <div class="music-bottom">
+        <div class="mode-wrap">
+          <button class="music-btn music-btn--sm" id="mode-btn">
+            <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M7 7h10v2H7V7zm0 4h7v2H7v-2zm11-4h-2v6l-1.5-1.5-1.41 1.41L17 17l3.91-3.91-1.41-1.41L18 13.18V7z"/></svg>
+          </button>
+          <span class="mode-tip" id="mode-tip">列表循环</span>
+        </div>
         <button class="music-btn music-btn--sm" id="volume-btn" title="音量">
           <svg viewBox="0 0 24 24" class="music-icon-sm" id="volume-icon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
         </button>
-        <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="20">
+        <div class="volume-bar-wrap" id="volume-bar"><div class="volume-fill" id="volume-fill"></div></div>
         <span class="volume-pct" id="volume-pct">20%</span>
       </div>
     </div>
@@ -407,10 +406,21 @@
   <div class="toast" id="toast">📋 邮箱已复制</div>
 
   <script>
-    /* Twemoji 加载完成后解析页面中所有 emoji */
+    /* Twemoji 加载完成后解析页面中所有 emoji
+       — 优先走 jsdelivr CDN，加载失败自动降级本地 72x72 */
     (function check() {
       if (typeof twemoji !== 'undefined') {
-        twemoji.parse(document.body, { className: 'emoji' });
+        twemoji.base = 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@v17.0.3/assets/72x72';
+        twemoji.size = '';   /* base 已含 72x72，不走默认 size 避免路径重复 */
+        twemoji.parse(document.body, {
+          className: 'emoji',
+          onerror: function () {
+            /* CDN 故障 → 全局切换 base，后续所有 parse() 都走本地 */
+            if (twemoji.base.indexOf('jsdelivr') !== -1) {
+              twemoji.base = 'assets/twemoji-72x72';
+            }
+          }
+        });
       } else {
         setTimeout(check, 50);
       }
