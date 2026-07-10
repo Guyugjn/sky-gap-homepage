@@ -86,4 +86,4 @@ Live2D 看板娘使用 [live2d-widget](https://github.com/stevenjoezhang/live2d-
 
 ---
 
-*由 Claude Code 辅助设计*
+*由 Claude Code + deepseek AI 辅助设计*
