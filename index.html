@@ -21,12 +21,9 @@
   <meta name="twitter:description" content="一条在天空之隙中游弋的飞鱼。">
   <meta name="twitter:image" content="http://150.138.73.135:10256/assets/avatar.jpg">
   <link rel="icon" href="assets/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Ma Shan Zheng 马山正体 — 本地托管，不依赖 Google Fonts -->
+  <link rel="stylesheet" href="assets/fonts/ma-shan-zheng.css">
   <!-- Live2D CDN 预连接：后续加载模型时省去 DNS + TCP + TLS 往返 -->
-  <link rel="preconnect" href="https://fastly.jsdelivr.net">
-  <link rel="preconnect" href="https://cdn.jsdelivr.net">
-  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
   <script defer src="assets/music/playlist.js"></script>
@@ -407,10 +404,13 @@
 
   <script>
     /* Twemoji 加载完成后解析页面中所有 emoji
-       — 优先走 jsdelivr CDN，加载失败自动降级本地 72x72 */
+       — HTTPS 走 jsdelivr CDN，HTTP/file 协议直接走本地（非安全上下文会被浏览器拦截 CDN 请求） */
     (function check() {
       if (typeof twemoji !== 'undefined') {
-        twemoji.base = 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@v17.0.3/assets/72x72';
+        var isSecure = location.protocol === 'https:';
+        twemoji.base = isSecure
+          ? 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@v17.0.3/assets/72x72'
+          : 'assets/twemoji-72x72';
         twemoji.size = '';   /* base 已含 72x72，不走默认 size 避免路径重复 */
         twemoji.parse(document.body, {
           className: 'emoji',
@@ -418,6 +418,16 @@
             /* CDN 故障 → 全局切换 base，后续所有 parse() 都走本地 */
             if (twemoji.base.indexOf('jsdelivr') !== -1) {
               twemoji.base = 'assets/twemoji-72x72';
+            }
+            /* 用本地路径重试一次，仍失败则退回纯文本避免碎图标识 */
+            if (!this._retried) {
+              this._retried = true;
+              var filename = this.src.substring(this.src.lastIndexOf('/') + 1);
+              this.src = 'assets/twemoji-72x72/' + filename;
+            } else {
+              if (this.parentNode) {
+                this.parentNode.replaceChild(document.createTextNode(this.alt), this);
+              }
             }
           }
         });
