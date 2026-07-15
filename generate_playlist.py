@@ -4,15 +4,14 @@
 """
 import os
 import json
-import re
 
 MUSIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'music')
 OUTPUT = os.path.join(MUSIC_DIR, 'playlist.js')
 
 
 def natural_key(name):
-    """自然排序：将字符串中的数字部分转为整数，实现 2 < 10 而非字典序"""
-    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', name)]
+    """字母序排序：按文件名首字母 A→Z 排列"""
+    return name.lower()
 
 
 def main():

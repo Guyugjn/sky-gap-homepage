@@ -532,6 +532,13 @@
       musicLabel.style.display = 'block';
       musicLabel.classList.remove('loading');
       musicLabel.classList.add('playing');
+      // 同步更新播放列表高亮
+      if (listInner) {
+        var items = listInner.querySelectorAll('.playlist-item');
+        for (var k = 0; k < items.length; k++) {
+          items[k].classList.toggle('current', parseInt(items[k].dataset.index, 10) === index);
+        }
+      }
     }
 
     // 曲名位置显示加载状态
@@ -591,8 +598,12 @@
       if (fadeAnimId) cancelAnimationFrame(fadeAnimId);
       var startTime = performance.now();
       function step(now) {
-        var progress = Math.min((now - startTime) / CONFIG.music.fadeInMs, 1);
-        audio.volume = volume * easeOutCubic(progress);
+        var elapsed = now - startTime;
+        if (elapsed < 0) elapsed = 0;
+        var progress = Math.min(elapsed / CONFIG.music.fadeInMs, 1);
+        var val = volume * easeOutCubic(progress);
+        if (val < 0) val = 0;
+        audio.volume = val;
         if (progress < 1) {
           fadeAnimId = requestAnimationFrame(step);
         } else {
@@ -620,6 +631,7 @@
       loadTrack(currentIndex);
       play();
       notifySongChange();
+      if (listOpen) scrollToListIndex(currentIndex);
     }
 
     function playNext() {
@@ -627,6 +639,7 @@
         // 单曲循环
         audio.currentTime = 0;
         play();
+        if (listOpen) scrollToListIndex(currentIndex);
         return;
       }
       if (playMode === 2) {
@@ -640,6 +653,7 @@
       loadTrack(currentIndex);
       play();
       notifySongChange();
+      if (listOpen) scrollToListIndex(currentIndex);
     }
 
     // === 加载状态 — 曲名位置显示加载中/缓冲中 ===
@@ -766,6 +780,174 @@
         });
       });
     }
+
+    // === 播放列表下拉面板 ===
+    var listBtn = document.getElementById('music-list-btn');
+    var playlistEl = document.getElementById('music-playlist');
+    var listInner = document.getElementById('playlist-inner');
+    var listOpen = false;
+
+    function renderPlaylist() {
+      if (!listInner) return;
+
+      var html = '';
+      for (var i = 0; i < totalTracks; i++) {
+        var isCurrent = (i === currentIndex && started);
+        var cls = isCurrent ? ' class="playlist-item current"' : ' class="playlist-item"';
+        html += '<span' + cls + ' data-index="' + i + '">' +
+                '<span class="pl-index">' + (i + 1) + '</span>' +
+                '<span class="pl-name">' + getDisplayName(i) + '</span>' +
+                '</span>';
+      }
+      listInner.innerHTML = html;
+
+      // 绑定点击
+      var items = listInner.querySelectorAll('.playlist-item');
+      for (var j = 0; j < items.length; j++) {
+        items[j].addEventListener('click', function () {
+          var idx = parseInt(this.dataset.index, 10);
+          if (idx === currentIndex && started) {
+            return;
+          }
+          if (playMode === 2 && started) {
+            playHistory.push(currentIndex);
+          }
+          loadTrack(idx);
+          play();
+          notifySongChange();
+          scrollToListIndex(idx);
+        });
+      }
+
+      // 滚动到当前曲目 — 用统一的缓动系统
+      if (started) {
+        scrollToListIndex(currentIndex);
+      }
+    }
+
+    // === 动量滚动系统 ===
+    // 滚轮实时改变 velocity，rAF 循环驱动惯性滑行
+    var scrollVel = 0;        // 当前速度 (px/frame)
+    var scrollRaf = 0;        // 主循环 ID
+    var scrollTarget = 0;     // 程序定位的目标（scrollToListIndex 使用）
+    var scrollSpring = false; // 是否正在弹性定位
+    var wheelActive = 0;      // 最后一帧滚轮输入的时间戳
+
+    // 物理常量
+    var FRICTION = 0.92;      // 摩擦系数（每帧衰减）
+    var WHEEL_GAIN = 0.18;    // 滚轮 delta → 速度转换系数
+    var MAX_SPEED = 10;       // 单帧最大位移 (px)
+    var SPRING_TENSION = 0.20;// 弹性定位劲度
+
+    function startScrollRaf() {
+      if (scrollRaf) return;
+      function step() {
+        if (!listInner || !listOpen) { scrollRaf = 0; return; }
+        var cur = listInner.scrollTop;
+        var maxS = listInner.scrollHeight - listInner.clientHeight;
+        var now = performance.now();
+
+        if (scrollSpring) {
+          // --- 弹性定位模式（scrollToListIndex 驱动）---
+          var diff = scrollTarget - cur;
+          if (Math.abs(diff) < 0.3) {
+            listInner.scrollTop = scrollTarget;
+            scrollVel = 0;
+            scrollSpring = false;
+          } else {
+            var next = cur + diff * SPRING_TENSION;
+            if (next < 0) next = 0;
+            else if (next > maxS) next = maxS;
+            if (Math.abs(next - cur) > 0.01) listInner.scrollTop = next;
+          }
+        } else {
+          // --- 滚轮/惯性模式 ---
+          if (now - wheelActive >= 80) {
+            // 无滚轮输入 → 惯性衰减
+            if (Math.abs(scrollVel) > 0.05) {
+              scrollVel *= FRICTION;
+            } else {
+              scrollVel = 0;
+            }
+          }
+          if (Math.abs(scrollVel) > 0.01) {
+            var next = cur + scrollVel;
+            if (next < 0) { next = 0; scrollVel = 0; }
+            else if (next > maxS) { next = maxS; scrollVel = 0; }
+            if (Math.abs(next - cur) > 0.01) listInner.scrollTop = next;
+          }
+        }
+
+        scrollRaf = requestAnimationFrame(step);
+      }
+      scrollRaf = requestAnimationFrame(step);
+    }
+
+    // 列表项索引 → scrollTop 居中定位（弹性动画）
+    function scrollToListIndex(index) {
+      if (!listInner) return;
+      var item = listInner.querySelector('.playlist-item[data-index="' + index + '"]');
+      if (!item) return;
+      var maxS = listInner.scrollHeight - listInner.clientHeight;
+      var target = item.offsetTop - (listInner.clientHeight - item.offsetHeight) / 2;
+      if (target < 0) target = 0;
+      if (target > maxS) target = maxS;
+      scrollTarget = target;
+      scrollVel = 0;
+      scrollSpring = true;
+      wheelActive = 0;
+      startScrollRaf();
+    }
+
+    // 鼠标滚轮接管 — 实时累加速度
+    function onPlaylistWheel(e) {
+      if (!listInner) return;
+      e.preventDefault();
+      var delta = e.deltaY;
+      if (e.deltaMode === 1) delta *= 18;
+      scrollVel += delta * WHEEL_GAIN;
+      if (scrollVel > MAX_SPEED) scrollVel = MAX_SPEED;
+      if (scrollVel < -MAX_SPEED) scrollVel = -MAX_SPEED;
+      scrollSpring = false;
+      wheelActive = performance.now();
+      startScrollRaf();
+    }
+
+    function openPlaylist() {
+      if (!playlistEl || !listInner) return;
+      renderPlaylist();
+      playlistEl.classList.add('open');
+      listBtn && listBtn.classList.add('open');
+      listOpen = true;
+      document.addEventListener('wheel', onPlaylistWheel, { passive: false });
+    }
+
+    function closePlaylist() {
+      if (!playlistEl) return;
+      playlistEl.classList.remove('open');
+      listBtn && listBtn.classList.remove('open');
+      listOpen = false;
+      cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      scrollVel = 0;
+      scrollSpring = false;
+      document.removeEventListener('wheel', onPlaylistWheel);
+    }
+
+    if (listBtn) {
+      listBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (listOpen) closePlaylist(); else openPlaylist();
+      });
+    }
+
+    // 点击播放器外部关闭列表
+    document.addEventListener('click', function (e) {
+      if (!listOpen || !playlistEl || !musicPlayer) return;
+      if (!musicPlayer.contains(e.target)) {
+        closePlaylist();
+      }
+    });
 
     // === 音量控制 ===
     function updateVolumeUI(vol) {
@@ -983,15 +1165,99 @@
     }
   }
 
+  // ==================== 7. 访客足迹 ====================
+
+  function initVisitor() {
+    var el = document.getElementById('footer-visitor');
+    if (!el) return;
+
+    var STORAGE_KEY = 'gy_visit';
+    var now = Date.now();
+    var data;
+
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      data = raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      data = null;
+    }
+
+    if (!data) {
+      // 首次访问
+      data = { first: now, count: 1 };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+      el.textContent = '🌊 欢迎你，第一位访客';
+      return;
+    }
+
+    // 同一天内不重复计数（按北京时间日期判断）
+    var firstDate = new Date(data.first).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    var today = new Date(now).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
+
+    if (firstDate !== today) {
+      // 不同天：计为新访问
+      data.count += 1;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    }
+
+    // 计算天数
+    var daysSinceFirst = Math.floor((now - data.first) / 86400000) + 1;
+    var daysText = daysSinceFirst <= 1 ? '第 1 天' : '第 ' + daysSinceFirst + ' 天';
+
+    el.textContent = '🌊 第 ' + data.count + ' 次相遇 · ' + daysText;
+  }
+
+  // ==================== 8. 页面加载进度条 ====================
+
+  function initLoadBar() {
+    var fill = document.getElementById('load-bar-fill');
+    var bar = document.getElementById('load-bar');
+    if (!fill || !bar) return;
+
+    // 模拟进度：页面开始加载后逐步推进，DOM 完成后加速，window.onload 时完成
+    var progress = 0;
+    var timer = null;
+
+    function step() {
+      // DOM 未就绪时慢速推进到 60%，之后加速到 90%，window.onload 跳到 100%
+      var target;
+      if (document.readyState === 'loading') {
+        target = Math.min(60, progress + (Math.random() * 8 + 2));
+      } else {
+        target = Math.min(90, progress + (Math.random() * 15 + 5));
+      }
+      progress = target;
+      fill.style.width = progress + '%';
+
+      if (progress < 90) {
+        timer = setTimeout(step, 200 + Math.random() * 400);
+      }
+    }
+
+    timer = setTimeout(step, 100);
+
+    // window.onload 时完成
+    window.addEventListener('load', function () {
+      clearTimeout(timer);
+      fill.classList.add('done');
+      // 动画结束后移除 DOM
+      setTimeout(function () {
+        if (bar.parentNode) bar.parentNode.removeChild(bar);
+      }, 500);
+    });
+  }
+
   // ==================== 启动 ====================
 
   function init() {
+    initLoadBar();
     initNightMode();
     initParticles();
     initParallax();
     initCloudParallax();
     initMusic();
     initSocialButtons();
+    initVisitor();
   }
 
   // DOMContentLoaded 或直接执行

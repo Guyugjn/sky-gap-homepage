@@ -4,39 +4,42 @@
 
 **在线访问：[www.080322.xyz](https://www.080322.xyz)**
 
-孤鱼GY 的个人主页 — 清晨天空渐变背景下，飞鱼穿梭于云层与星辰之间。纯 HTML/CSS/JS，零框架，毛玻璃卡片，Live2D 看板娘。
+孤鱼GY 的个人主页。清晨天空渐变背景下，一只飞鱼穿梭于云层与星辰之间。纯 HTML/CSS/JS，零框架、零构建。
 
 ---
 
-## 功能
+## ✨ 亮点
 
-- **飞鱼自主飞行** — SVG 飞鱼正弦波漫游 + 鼠标吸引追逐 + 点击涟漪惊吓逃跑 + 瞳孔追踪
-- **星座星空** — 7 个真实星座的粒子网络星图，弹簧物理 + 自主微晃 + 点击星星绘制金色连线
-- **生日倒计时** — 精确到秒，生日当天彩带特效
-- **每日运势** — 今日/本周/本月/年度运势，访客可输入生日查询星座并自动切换运势
-- **日夜模式** — 19:00–06:00 自动切换深蓝夜空配色，支持手动切换（太阳/月亮 SVG 按钮）
-- **云层漂移** — 纯 CSS 远/中/近三层云朵以不同速度漂过，鼠标视差微移
-- **音乐播放器** — 自定义进度条/音量条拖拽（同款系统），三种播放模式，淡入切歌，智能预加载，点击复制曲名
-- **Live2D 看板娘** — Pio/Izumi 双模型，延迟初始化（不抢首屏带宽），120+ 条对话气泡与页面元素联动
-- **Twemoji 跨平台 emoji** — Twemoji v17.0.3，优先 jsdelivr CDN，加载失败自动降级本地 72x72 PNG（4009 张）
+- **飞鱼自主飞行** — SVG 飞鱼在页面自由游动：正弦波漫游 → 鼠标吸引追逐 → 点击惊吓逃跑。瞳孔追踪光标，惯性系统带来自然的弧线迂回。
+- **星座星空** — 7 个真实星座（白羊、金牛、双子、狮子、天蝎、北斗、猎户）的粒子网络星图，弹簧物理 + 布朗漂移。点击两颗星星绘制金色连线。
+- **Live2D 看板娘** — Pio / Izumi 双模型，120+ 条对话与页面元素联动。延迟初始化不抢首屏带宽，移动端自动隐藏。
+- **音乐播放器** — 自定义拖拽进度条/音量条，三种播放模式，智能预加载，淡入切歌。63 首曲目，默认随机播放。播放列表支持动量滚动（滚轮惯性滑行 + 弹簧定位），切换曲目自动跟随，点击即切歌不关闭面板。
 
-## 技术栈
+## 🎯 功能一览
 
-纯静态站点，浏览器直接打开 `index.html` 即可运行。
+### 视觉
+- 天空渐变背景（日夜自动切换，3s 过渡）
+- 光粒子上升系统（Canvas，径向渐变发光）
+- 三层云朵 CSS 漂移 + 鼠标视差
+- 滚动驱动的卡片弹性浮现（IntersectionObserver）
+- 生日当天彩带庆祝特效
 
-| 层级 | 实现 |
-|------|------|
-| 结构 | HTML5 语义化标签 |
-| 样式 | 纯 CSS，CSS 变量统一色调，毛玻璃卡片，刘海屏安全区适配 |
-| 字体 | Ma Shan Zheng（毛笔展示体），系统无衬线正文 |
-| 动画 | Canvas 2D（粒子星图/连线）、CSS @keyframes（云层/涟漪/彩带）、requestAnimationFrame（飞鱼/星空） |
-| 滚动 | IntersectionObserver 驱动卡片浮现，弹性入场动画 |
-| 日夜 | CSS 变量一键切换，3s 渐变过渡，自动 + 手动双模式 |
-| Emoji | Twemoji v17.0.3，CDN 优先 + 本地 72x72 降级，跨平台统一渲染 |
-| Load | 脚本全部 `defer` 并行下载，Live2D `requestIdleCallback` 延迟初始化，智能音乐预加载 |
-| 数据 | xxapi.cn 星座运势 API，Python 脚本生成音乐播放列表 |
+### 交互
+- 日夜模式自动切换（19:00–06:00）+ 手动覆盖
+- 星座查询（月/日选择器，自动切换运势）
+- 每日/本周/本月/年度运势（xxapi.cn API）
+- 生日倒计时（精确到秒）
+- 社交链接：GitHub、Bilibili、邮箱复制
+- 访客足迹 — 页脚显示访问次数与天数（localStorage，按天计数）
 
-## 本地运行
+### 技术
+- Twemoji v17.0.3 跨平台 emoji 统一渲染（CDN 优先 + 本地降级）
+- 刘海屏安全区适配 + 三断点响应式（768/640/400px）
+- `visibilitychange` 节能（三套 rAF 循环切标签页暂停）
+- 脚本全部 `defer` 并行加载，Live2D `requestIdleCallback` 延迟初始化
+- 页面加载进度条（顶部渐变色细线，DOM 就绪加速，load 事件完成）
+
+## 🚀 本地运行
 
 ```bash
 git clone https://github.com/Guyugjn/sky-gap-homepage.git
@@ -44,46 +47,33 @@ git clone https://github.com/Guyugjn/sky-gap-homepage.git
 
 浏览器直接打开 `index.html`，无需构建。
 
-> **IIS 部署注意**：`live2d/web.config` 注册了 `.moc` / `.mtn` 的 MIME 类型，`web.config`（根目录）设置了 7 天静态资源缓存。非 IIS 服务器可忽略这两个文件。
+> IIS 部署注意：`live2d/web.config` 注册了 `.moc`/`.mtn` MIME 类型，根目录 `web.config` 设置了静态资源缓存。非 IIS 服务器可忽略。
 
-## 音乐管理
+### 音乐管理
 
 ```bash
 # 将 mp3 放入 assets/music/ 后运行
 python generate_playlist.py
 ```
 
-## 项目结构
+## 📁 项目结构
 
 ```
-index.html              — 页面结构（含 SEO / Twemoji 初始化）
-css/style.css           — 全局样式、设计系统、动画
-js/main.js              — 飞鱼、音乐播放器、交互逻辑
-js/zodiac.js            — 星座模块（倒计时/运势/星图/浮现）
-generate_playlist.py    — 扫描 assets/music/ 生成播放列表
-web.config              — IIS 静态资源缓存（7 天）
-live2d/
-  autoload.js           — Live2D 加载器（内联 120+ 条对话配置，延迟初始化）
-  live2d.min.js         — Cubism 2 Core SDK
-  waifu.css             — 看板娘样式
-  web.config            — IIS MIME 类型（.moc/.mtn）
-  models/
-    pio/                — Pio 角色模型（默认）
-    izumi/              — 和泉 Izumi 角色模型
-assets/
-  avatar.jpg            — 头像
-  favicon.svg           — 标签页图标（淡蓝圆底 + 小鱼）
-  twemoji.min.js        — Twemoji v17.0.3（17KB）
-  twemoji-72x72/        — Twemoji 72x72 PNG 图片（4009 张，CDN 降级备用，不上传 git）
-  music/                — mp3 文件（63 首）+ playlist.js
+index.html           — 页面结构（SEO meta、Twemoji 初始化）
+css/style.css        — 全局样式、CSS 变量设计系统、动画、响应式
+js/main.js           — 光粒子、飞鱼、音乐播放器、云层视差、日夜切换、Toast
+js/zodiac.js         — 星座数据、倒计时、运势 API、星空 Canvas、滚动浮现
+live2d/              — Live2D 看板娘（autoload.js + Cubism SDK + 双角色模型）
+assets/              — 头像、favicon、Twemoji 库、字体、音乐
+generate_playlist.py — 扫描 assets/music/ 生成播放列表（按 A→Z 字母序）
 ```
 
-## 协议
+## 📄 协议
 
 本项目代码以 MIT License 发布。
 
-Live2D 看板娘使用 [live2d-widget](https://github.com/stevenjoezhang/live2d-widget)（GPL-3.0），模型文件来自 [live2d-widget-model-izumi](https://github.com/stevenjoezhang/live2d-widget-model-izumi) 和 [live2d_api](https://github.com/fghrsh/live2d_api)。
+Live2D 看板娘基于 [live2d-widget](https://github.com/stevenjoezhang/live2d-widget)（GPL-3.0），模型文件来自 [live2d-widget-model-izumi](https://github.com/stevenjoezhang/live2d-widget-model-izumi) 和 [live2d_api](https://github.com/fghrsh/live2d_api)。
 
 ---
 
-*由 Claude Code + deepseek AI 辅助设计*
+*由 Claude Code + DeepSeek AI 辅助设计*

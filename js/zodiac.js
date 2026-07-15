@@ -795,16 +795,6 @@
   // ==================== 7. 滚动渐进浮现（IntersectionObserver 驱动） ====================
 
   function initScrollBehavior() {
-    var scrollHint = document.querySelector('.scroll-hint');
-    var zodiacSection = document.getElementById('zodiac-section');
-
-    // 点击滚动箭头 → 滑到星座区域
-    if (scrollHint && zodiacSection) {
-      scrollHint.addEventListener('click', function () {
-        zodiacSection.scrollIntoView({ behavior: 'smooth' });
-      });
-    }
-
     // ---- IntersectionObserver 驱动浮现（替代 scroll + rAF） ----
     var revealEls = document.querySelectorAll('.reveal-up');
     if (!revealEls.length) return;

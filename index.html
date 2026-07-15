@@ -33,6 +33,9 @@
   <script defer src="assets/twemoji.min.js"></script>
 </head>
 <body>
+  <!-- 页面加载进度条 -->
+  <div id="load-bar"><div id="load-bar-fill"></div></div>
+
   <!-- 天空渐变背景 -->
   <div class="sky-bg"></div>
 
@@ -182,10 +185,17 @@
 
     <!-- 音乐播放器 — iOS 控制中心风格 -->
     <div class="music-player" id="music-player">
-      <!-- 第一行：曲名 -->
+      <!-- 第一行：曲名 + 列表按钮 -->
       <div class="music-label-wrap">
         <span class="music-label" id="music-label">来放一首音乐吧 🎵</span>
         <span class="social-tip" id="music-tip">点击复制曲名</span>
+      </div>
+
+      <!-- 播放列表下拉面板 -->
+      <div class="music-playlist" id="music-playlist">
+        <div class="playlist-divider"></div>
+        <div class="playlist-inner" id="playlist-inner"></div>
+        <div class="playlist-divider playlist-divider-bottom"></div>
       </div>
 
       <!-- 第二行：上一首 · 播放/暂停 · 下一首 -->
@@ -209,8 +219,11 @@
         <span class="time-label" id="time-total">0:00</span>
       </div>
 
-      <!-- 第四行：随机播放 + 音量 -->
+      <!-- 第四行：列表按钮 + 随机播放 + 音量 -->
       <div class="music-bottom">
+        <button class="music-btn music-btn--sm" id="music-list-btn" title="播放列表" aria-label="打开播放列表">
+          <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+        </button>
         <div class="mode-wrap">
           <button class="music-btn music-btn--sm" id="mode-btn">
             <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M7 7h10v2H7V7zm0 4h7v2H7v-2zm11-4h-2v6l-1.5-1.5-1.41 1.41L17 17l3.91-3.91-1.41-1.41L18 13.18V7z"/></svg>
@@ -225,11 +238,7 @@
       </div>
     </div>
 
-    <!-- 滚动提示 -->
-    <div class="scroll-hint">
-      <span class="scroll-arrow"></span>
-    </div>
-  </main>
+      </main>
   <section class="zodiac-section" id="zodiac-section">
     <!-- 星图背景（藏在 UI 后面） -->
     <canvas class="starchart-canvas" id="starchart-canvas"></canvas>
@@ -397,6 +406,7 @@
     <p class="footer-brand">谢谢你，游到这里</p>
     <p class="footer-tagline">孤鱼GY · 天空之隙</p>
     <p class="footer-copy">© 2026–2077</p>
+    <p class="footer-visitor" id="footer-visitor"></p>
   </footer>
 
   <!-- 复制提示气泡 -->

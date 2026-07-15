@@ -77,8 +77,7 @@ html {
 /* 全局：减少移动端双击缩放延迟 */
 button,
 a,
-select,
-.scroll-hint {
+select {
   touch-action: manipulation;
 }
 
@@ -94,6 +93,31 @@ body {
   overscroll-behavior: none;
   /* 刘海屏 / 底部指示条安全区适配 */
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ============================================
+   页面加载进度条
+   ============================================ */
+#load-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  z-index: 9999;
+  pointer-events: none;
+}
+#load-bar-fill {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--warm-accent));
+  transition: width 0.3s ease-out;
+  /* 完成时快速消失 */
+}
+#load-bar-fill.done {
+  width: 100%;
+  opacity: 0;
+  transition: width 0.15s ease-out, opacity 0.4s ease-out;
 }
 
 /* --- 天空背景 --- */
@@ -557,44 +581,17 @@ body {
   }
 }
 
-/* --- 滚动提示 --- */
-.scroll-hint {
-  position: absolute;
-  bottom: 4.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  cursor: pointer;
-  animation: fade-up 0.6s 0.72s var(--ease-playful) both, scroll-bob 2s 1.3s ease-in-out infinite;
-}
-
-.scroll-arrow {
-  display: block;
-  width: 36px;
-  height: 36px;
-  border-right: 3px solid var(--text-secondary);
-  border-bottom: 3px solid var(--text-secondary);
-  transform: rotate(45deg);
-  opacity: 0.7;
-}
-
-@keyframes scroll-bob {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  30%      { transform: translateX(-50%) translateY(18px); }
-  50%      { transform: translateX(-50%) translateY(12px); }
-  70%      { transform: translateX(-50%) translateY(18px); }
-}
-
 /* ============================================
    音乐播放器 — iOS 控制中心卡片风格
    ┌──────────────────────────┐
-   │  曲名                     │  第1行
+   │  曲名                     │  第1行 .music-label-wrap
    ├──────────────────────────┤
    │     ⏮    ▶⏸    ⏭        │  第2行 .music-controls
    ├──────────────────────────┤
    │  ═══════进度══════        │  第3行 .progress-wrap
    │  0:00 ──────── 0:00      │
    ├──────────────────────────┤
-   │  🔀        🔊 ═══  20%  │  第4行 .music-bottom
+   │  ☰   🔀    🔊 ═══  20%  │  第4行 .music-bottom
    └──────────────────────────┘
    设计个性：iOS 半透明毛玻璃 + 细圆角 + 统一间距
    ============================================ */
@@ -636,10 +633,6 @@ body {
 }
 
 /* ---- 曲名（第1行）---- */
-.music-label-wrap {
-  flex-shrink: 0;
-  align-self: center;          /* 在 flex column 中居中 */
-}
 .music-label {
   font-size: 0.8rem;
   font-weight: 400;
@@ -675,6 +668,124 @@ body {
 @keyframes label-pulse {
   0%, 100% { opacity: 0.4; }
   50%      { opacity: 1; }
+}
+
+/* 列表按钮打开状态 */
+#music-list-btn.open {
+  color: var(--accent-hover);
+}
+
+/* ---- 播放列表下拉面板 ---- */
+.music-playlist {
+  max-height: 0;
+  overflow: hidden;
+  margin: 0 -0.65rem -0.65rem;
+  border-radius: 0;
+  transition: max-height 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+.music-playlist.open {
+  max-height: 175px;
+}
+
+/* 列表分隔线 */
+.playlist-divider {
+  height: 1px;
+  margin: 0 0.9rem;
+  background: var(--card-border);
+  flex-shrink: 0;
+}
+
+/* 底部分隔线 — 上下留间距，和按钮行拉开 */
+.playlist-divider-bottom {
+  height: 1px;
+  margin: 0.45rem 0.9rem 0.25rem;
+  background: var(--card-border);
+  flex-shrink: 0;
+}
+
+.playlist-inner {
+  max-height: 175px;
+  overflow-y: auto;
+  padding: 0.35rem 0 0.65rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(137, 196, 225, 0.3) transparent;
+}
+.playlist-inner::-webkit-scrollbar {
+  width: 4px;
+}
+.playlist-inner::-webkit-scrollbar-track {
+  background: transparent;
+}
+.playlist-inner::-webkit-scrollbar-thumb {
+  background: rgba(137, 196, 225, 0.35);
+  border-radius: 4px;
+}
+
+/* 列表项 */
+.playlist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+  user-select: none;
+  position: relative;
+}
+.playlist-item:hover {
+  background: rgba(137, 196, 225, 0.1);
+  color: var(--text-primary);
+}
+/* 序号 */
+.playlist-item .pl-index {
+  flex-shrink: 0;
+  width: 1.3em;
+  text-align: right;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+/* 曲名（允许截断） */
+.playlist-item .pl-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 当前播放项指示 */
+.playlist-item.current {
+  color: var(--accent-hover);
+  font-weight: 500;
+  background: rgba(137, 196, 225, 0.08);
+}
+.playlist-item.current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent-hover);
+}
+.playlist-item.current .pl-index {
+  color: var(--accent-hover);
+  opacity: 0.8;
+}
+
+/* ---- 曲名行改为横向 flex 容纳按钮 ---- */
+.music-label-wrap {
+  flex-shrink: 0;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* ==================== 第二行：上一首 · 播放 · 下一首 ==================== */
@@ -1051,6 +1162,13 @@ body {
   letter-spacing: 0.05em;
 }
 
+.footer-visitor {
+  margin-top: 0.15rem;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 /* --- 响应式适配 --- */
 @media (max-width: 640px) {
   .hero {
@@ -1083,6 +1201,16 @@ body {
     padding: 0.6rem 0.85rem;
     gap: 0.5rem;
     border-radius: 22px;
+  }
+  .music-playlist {
+    border-radius: 0;
+    margin: 0 -0.85rem -0.6rem;
+  }
+  .music-playlist.open {
+    max-height: 155px;
+  }
+  .playlist-inner {
+    max-height: 155px;
   }
 
   .music-btn {
@@ -1131,6 +1259,16 @@ body {
     padding: 0.5rem 0.75rem;
     gap: 0.4rem;
     border-radius: 20px;
+  }
+  .music-playlist {
+    border-radius: 0;
+    margin: 0 -0.75rem -0.5rem;
+  }
+  .music-playlist.open {
+    max-height: 135px;
+  }
+  .playlist-inner {
+    max-height: 135px;
   }
 
   .music-btn {
@@ -2083,6 +2221,28 @@ html.night-mode .query-btn {
 }
 html.night-mode .query-btn:hover {
   background: #5DA8D8;
+}
+
+/* 播放列表面板 — 夜间适配 */
+html.night-mode .playlist-divider,
+html.night-mode .playlist-divider-bottom {
+  background: rgba(140, 180, 210, 0.2);
+}
+html.night-mode .playlist-item {
+  color: var(--text-secondary);
+}
+html.night-mode .playlist-item:hover {
+  background: rgba(40, 65, 95, 0.45);
+  color: var(--text-primary);
+}
+html.night-mode .playlist-item.current {
+  background: rgba(100, 160, 210, 0.12);
+}
+html.night-mode .playlist-item.current::before {
+  background: var(--accent-hover);
+}
+html.night-mode .playlist-inner::-webkit-scrollbar-thumb {
+  background: rgba(140, 180, 210, 0.25);
 }
 
 /* 查询下拉框 */
