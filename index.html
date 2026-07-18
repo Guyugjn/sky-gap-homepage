@@ -250,61 +250,69 @@
         <span class="zodiac-title-deco">✦</span>
       </div>
       <p class="zodiac-subtitle reveal-up d1">在星空间，聆听宇宙的低语</p>
+
+      <!-- 星环日轨 — 交互式星座查询 -->
+      <div class="orbit-ring" id="orbit-ring">
+        <svg class="orbit-svg" viewBox="0 0 600 600">
+          <defs>
+            <!-- 星体径向渐变：亮核 + 柔光晕（普通蓝星 / 选中亮星 / 确认金星） -->
+            <radialGradient id="orbit-star-blue">
+              <stop offset="0%" stop-color="#EAF5FF" stop-opacity="0.95"/>
+              <stop offset="28%" stop-color="#A8D4EE" stop-opacity="0.75"/>
+              <stop offset="60%" stop-color="#89C4E1" stop-opacity="0.28"/>
+              <stop offset="100%" stop-color="#89C4E1" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="orbit-star-lit">
+              <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+              <stop offset="30%" stop-color="#D8ECFB" stop-opacity="0.9"/>
+              <stop offset="65%" stop-color="#A8D4EE" stop-opacity="0.38"/>
+              <stop offset="100%" stop-color="#A8D4EE" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="orbit-star-gold">
+              <stop offset="0%" stop-color="#FFF2D8" stop-opacity="1"/>
+              <stop offset="30%" stop-color="#F5D08C" stop-opacity="0.92"/>
+              <stop offset="65%" stop-color="#F0C060" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#F0C060" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <!-- 外圈轨道（月份） -->
+          <circle class="orbit-track orbit-track--outer" cx="300" cy="300" r="240"/>
+          <g class="orbit-outer-group" id="orbit-outer-group">
+            <g class="orbit-outer-nodes" id="orbit-outer-nodes"></g>
+            <!-- 选中月星的四芒星光（JS 定位到选中星，随外圈同转） -->
+            <g class="orbit-spark-pos" id="orbit-spark-outer">
+              <g class="orbit-spark orbit-spark--lg">
+                <line x1="-14" y1="0" x2="14" y2="0"/>
+                <line x1="0" y1="-14" x2="0" y2="14"/>
+              </g>
+            </g>
+          </g>
+          <!-- 内圈轨道（日期） -->
+          <circle class="orbit-track orbit-track--inner" cx="300" cy="300" r="140"/>
+          <g class="orbit-inner-group" id="orbit-inner-group">
+            <g class="orbit-inner-nodes" id="orbit-inner-nodes"></g>
+            <!-- 选中日星的四芒星光 -->
+            <g class="orbit-spark-pos" id="orbit-spark-inner">
+              <g class="orbit-spark">
+                <line x1="-10" y1="0" x2="10" y2="0"/>
+                <line x1="0" y1="-10" x2="0" y2="10"/>
+              </g>
+            </g>
+          </g>
+          <!-- 中心微光 -->
+          <circle class="orbit-core" cx="300" cy="300" r="3"/>
+        </svg>
+        <!-- 中心数字标注 — hover 预览 / 已选月日反馈 -->
+        <div class="orbit-center-label" id="orbit-center-label"></div>
+        <div class="orbit-hint" id="orbit-hint">外圈选月份 · 内圈选日期</div>
+        <button class="orbit-confirm" id="orbit-confirm" style="display:none;">确认星座</button>
+        <!-- 确认后的浮动结果 -->
+        <div class="orbit-result" id="orbit-result" style="display:none;"></div>
+      </div>
+
       <div class="zodiac-grid">
-        <!-- ===== 上行：二列 ===== -->
-        <!-- 生日倒计时卡片 -->
-        <div class="zodiac-card countdown-card reveal-up d2" id="countdown-card">
-          <div class="card-icon">🎂</div>
-          <h3 class="card-title">我的生日倒计时</h3>
-          <p class="card-subtitle" id="birthday-date">3月22日 · 白羊座</p>
-          <div class="countdown-digits" id="countdown-digits">
-            <div class="countdown-unit">
-              <span class="countdown-num" id="cd-days">000</span>
-              <span class="countdown-label">天</span>
-            </div>
-            <span class="countdown-sep">:</span>
-            <div class="countdown-unit">
-              <span class="countdown-num" id="cd-hours">00</span>
-              <span class="countdown-label">时</span>
-            </div>
-            <span class="countdown-sep">:</span>
-            <div class="countdown-unit">
-              <span class="countdown-num" id="cd-mins">00</span>
-              <span class="countdown-label">分</span>
-            </div>
-            <span class="countdown-sep">:</span>
-            <div class="countdown-unit">
-              <span class="countdown-num" id="cd-secs">00</span>
-              <span class="countdown-label">秒</span>
-            </div>
-          </div>
-          <p class="countdown-birthday-msg" id="birthday-msg" style="display:none;">
-            🎉 今天是我的生日！
-          </p>
-          <!-- 彩带容器 -->
-          <div class="confetti-container" id="confetti-container"></div>
-        </div>
-
-        <!-- 我的星座卡片 -->
-        <div class="zodiac-card sign-info-card reveal-up d3" id="my-sign-card">
-          <div class="card-icon sign-emoji" id="my-sign-emoji">♈</div>
-          <h3 class="card-title" id="my-sign-name">白羊座</h3>
-          <p class="card-subtitle" id="my-sign-date">3.21 – 4.19</p>
-          <div class="sign-details">
-            <div class="sign-detail-item">
-              <span class="detail-label">元素</span>
-              <span class="detail-value" id="my-sign-element">火象</span>
-            </div>
-            <div class="sign-detail-item">
-              <span class="detail-label">守护星</span>
-              <span class="detail-value" id="my-sign-planet">火星</span>
-            </div>
-          </div>
-          <p class="sign-desc" id="my-sign-desc">热情勇敢、直率坦诚的白羊座，永远是最先冲出去的那个！</p>
-        </div>
-
-        <!-- ===== 下行：通栏运势 ===== -->
-        <div class="zodiac-card fortune-card fortune-card--full reveal-up d4" id="fortune-card">
+        <!-- ===== 运势面板 ===== -->
+        <div class="zodiac-card fortune-card fortune-card--full" id="fortune-card">
           <div class="fortune-header">
             <div class="fortune-header-left">
               <div class="card-icon">🔮</div>
@@ -353,50 +361,7 @@
           <p class="fortune-error" id="fortune-error" style="display:none;">运势加载失败，请稍后重试</p>
         </div>
 
-        <!-- ===== 下行：通栏查询 ===== -->
-        <div class="zodiac-card query-card query-card--full reveal-up d5" id="query-card">
-          <div class="query-layout">
-            <div class="query-left">
-              <div class="card-icon">🔍</div>
-              <h3 class="card-title">查询你的星座</h3>
-              <p class="card-subtitle">选择生日，查看属于你的星座</p>
-              <div class="query-form">
-                <div class="query-row">
-                  <select class="query-select" id="query-month">
-                    <option value="">月</option>
-                  </select>
-                  <select class="query-select" id="query-day">
-                    <option value="">日</option>
-                  </select>
-                  <button class="query-btn" id="query-btn">查询</button>
-                </div>
-              </div>
-            </div>
-            <div class="query-right">
-              <div class="query-result" id="query-result" style="display:none;">
-                <div class="query-sign-icon" id="query-sign-emoji">♈</div>
-                <h4 class="query-sign-name" id="query-sign-name">白羊座</h4>
-                <p class="query-sign-date" id="query-sign-date">3.21 – 4.19</p>
-                <div class="sign-details">
-                  <div class="sign-detail-item">
-                    <span class="detail-label">元素</span>
-                    <span class="detail-value" id="query-sign-element">火象</span>
-                  </div>
-                  <div class="sign-detail-item">
-                    <span class="detail-label">守护星</span>
-                    <span class="detail-value" id="query-sign-planet">火星</span>
-                  </div>
-                </div>
-                <p class="sign-desc" id="query-sign-desc">—</p>
-              </div>
-              <div class="query-placeholder" id="query-placeholder">
-                <span class="query-placeholder-icon">✨</span>
-                <span>输入生日查看星座</span>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
     </div>
   </section>
 

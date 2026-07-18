@@ -45,6 +45,26 @@
     _pageVisible = !document.hidden;
   });
 
+  // ==================== 全局 rAF 调度 — 统一帧循环 ====================
+  // 所有子系统（光粒子、飞鱼、星空）注册到同一个 rAF，统一节拍 + 省 GPU
+
+  var _tickers = [];
+
+  /** 注册 tick 回调 — 每帧调用 cb(timestamp) */
+  window._registerTick = function (cb) {
+    _tickers.push(cb);
+  };
+
+  function _globalLoop(ts) {
+    if (_pageVisible) {
+      for (var _ti = 0; _ti < _tickers.length; _ti++) {
+        _tickers[_ti](ts);
+      }
+    }
+    requestAnimationFrame(_globalLoop);
+  }
+  _globalLoop(0);
+
   // ==================== DOM 引用 ====================
 
   const canvas = document.getElementById('particles-canvas');
@@ -233,13 +253,8 @@
       }
     }
 
-    function animate(time) {
-      if (!_pageVisible) { animationId = requestAnimationFrame(animate); return; }
-      draw(time);
-      animationId = requestAnimationFrame(animate);
-    }
-
-    animationId = requestAnimationFrame(animate);
+    particles = createParticles();
+    window._registerTick(draw);
   }
 
   // ==================== 2. 飞鱼：自主漫游 + 鼠标吸引 ====================
@@ -263,8 +278,6 @@
     var scaredUntil = 0;        // 受惊逃跑期间面朝远离光标方向
 
     function update() {
-      // 页面不可见时暂停更新，省 CPU
-      if (!_pageVisible) { requestAnimationFrame(update); return; }
       var now = Date.now();
       var idleMs = lastMouseActivity ? now - lastMouseActivity : Infinity;
 
@@ -416,8 +429,6 @@
           }
         }
       }
-
-      requestAnimationFrame(update);
     }
 
     // 点击任意位置 → 涟漪 + 鱼在范围内则逃跑
@@ -456,7 +467,7 @@
       targetMouseY = e.clientY;
     });
 
-    update();
+    window._registerTick(update);
   }
 
   // ==================== 3. 音乐播放器 ====================
@@ -1097,6 +1108,20 @@
   // ==================== 5. 深夜模式切换（自动 + 手动） ====================
 
   var _nightManual = false; // 用户手动切换后覆盖自动检测，刷新页面恢复
+  var _themeFadeTimer = null;
+
+  /** 应用夜间模式；animate=true 时挂载 theme-fade 使全页颜色 2s 渐变（载入初始设置直接到位） */
+  function applyNight(isNight, animate) {
+    var root = document.documentElement;
+    if (animate && root.classList.contains('night-mode') !== isNight) {
+      root.classList.add('theme-fade');
+      clearTimeout(_themeFadeTimer);
+      _themeFadeTimer = setTimeout(function () {
+        root.classList.remove('theme-fade');
+      }, 2200);
+    }
+    root.classList.toggle('night-mode', isNight);
+  }
 
   function initNightMode() {
     var btn = document.getElementById('theme-toggle');
@@ -1111,18 +1136,21 @@
       iconPath.setAttribute('d', isNight ? ICON_MOON : ICON_SUN);
     }
 
+    var firstRun = true; // 载入时的初始设置不渐变
+
     function update() {
       if (_nightManual) return; // 手动模式覆盖自动
       var hour = new Date().getHours();
       var isNight = hour >= 19 || hour < 6;
-      document.documentElement.classList.toggle('night-mode', isNight);
+      applyNight(isNight, !firstRun);
+      firstRun = false;
       updateIcon();
     }
 
     if (btn) {
       btn.addEventListener('click', function () {
         _nightManual = true;
-        document.documentElement.classList.toggle('night-mode');
+        applyNight(!document.documentElement.classList.contains('night-mode'), true);
         updateIcon();
       });
     }
@@ -1186,7 +1214,8 @@
       // 首次访问
       data = { first: now, count: 1 };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
-      el.textContent = '🌊 欢迎你，第一位访客';
+      var welcome = '欢迎你，第一位访客';
+      el.textContent = '🌊 ' + welcome;
       return;
     }
 
@@ -1204,7 +1233,8 @@
     var daysSinceFirst = Math.floor((now - data.first) / 86400000) + 1;
     var daysText = daysSinceFirst <= 1 ? '第 1 天' : '第 ' + daysSinceFirst + ' 天';
 
-    el.textContent = '🌊 第 ' + data.count + ' 次相遇 · ' + daysText;
+    var text = '第 ' + data.count + ' 次相遇 · ' + daysText;
+    el.textContent = '🌊 ' + text;
   }
 
   // ==================== 8. 页面加载进度条 ====================
