@@ -251,8 +251,43 @@
       </div>
       <p class="zodiac-subtitle reveal-up d1">在星空间，聆听宇宙的低语</p>
 
-      <!-- 星环日轨 — 交互式星座查询 -->
-      <div class="orbit-ring" id="orbit-ring">
+      <!-- 白天模式：塔罗符卡日期选择（上排月符卡 + 下排日符卡） -->
+      <div class="tarot-deck" id="tarot-deck">
+        <!-- 上层：12 张月份符卡 -->
+        <div class="tarot-row tarot-months" id="tarot-months">
+          <button class="tarot-card" data-month="1"><span class="tarot-glyph">♑</span><span class="tarot-label">1月</span></button>
+          <button class="tarot-card" data-month="2"><span class="tarot-glyph">♒</span><span class="tarot-label">2月</span></button>
+          <button class="tarot-card" data-month="3"><span class="tarot-glyph">♓</span><span class="tarot-label">3月</span></button>
+          <button class="tarot-card" data-month="4"><span class="tarot-glyph">♈</span><span class="tarot-label">4月</span></button>
+          <button class="tarot-card" data-month="5"><span class="tarot-glyph">♉</span><span class="tarot-label">5月</span></button>
+          <button class="tarot-card" data-month="6"><span class="tarot-glyph">♊</span><span class="tarot-label">6月</span></button>
+          <button class="tarot-card" data-month="7"><span class="tarot-glyph">♋</span><span class="tarot-label">7月</span></button>
+          <button class="tarot-card" data-month="8"><span class="tarot-glyph">♌</span><span class="tarot-label">8月</span></button>
+          <button class="tarot-card" data-month="9"><span class="tarot-glyph">♍</span><span class="tarot-label">9月</span></button>
+          <button class="tarot-card" data-month="10"><span class="tarot-glyph">♎</span><span class="tarot-label">10月</span></button>
+          <button class="tarot-card" data-month="11"><span class="tarot-glyph">♏</span><span class="tarot-label">11月</span></button>
+          <button class="tarot-card" data-month="12"><span class="tarot-glyph">♐</span><span class="tarot-label">12月</span></button>
+        </div>
+        <!-- 下层：日期塔罗牌卡日历 -->
+        <div class="tarot-calendar" id="tarot-calendar">
+          <div class="cal-weekdays">
+            <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+          </div>
+          <div class="cal-grid" id="cal-grid">
+            <!-- JS 根据选中月份动态生成日期卡片 -->
+          </div>
+        </div>
+        <!-- 中心确认区域 -->
+        <div class="tarot-center" id="tarot-center">
+          <span class="tarot-oracle" id="tarot-oracle"></span>
+          <span class="tarot-hint" id="tarot-hint">选择一张月份符卡，再选一个日期</span>
+        </div>
+        <button class="tarot-confirm" id="tarot-confirm" style="display:none;">确认选择</button>
+        <div class="orbit-result" id="orbit-result" style="display:none;"></div>
+      </div>
+
+      <!-- 夜间模式：星环日轨（仅夜间显示） -->
+      <div class="orbit-ring" id="orbit-ring" style="display:none;">
         <svg class="orbit-svg" viewBox="0 0 600 600">
           <defs>
             <!-- 星体径向渐变：亮核 + 柔光晕（普通蓝星 / 选中亮星 / 确认金星） -->
@@ -307,7 +342,7 @@
         <div class="orbit-hint" id="orbit-hint">外圈选月份 · 内圈选日期</div>
         <button class="orbit-confirm" id="orbit-confirm" style="display:none;">确认星座</button>
         <!-- 确认后的浮动结果 -->
-        <div class="orbit-result" id="orbit-result" style="display:none;"></div>
+        <div class="orbit-result" id="orbit-result-ring" style="display:none;"></div>
       </div>
 
       <div class="zodiac-grid">

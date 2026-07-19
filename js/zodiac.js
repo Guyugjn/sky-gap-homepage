@@ -235,7 +235,233 @@
     loadFortune();
   }
 
-  // ==================== 2. 星环日轨（交互式星座查询） ====================
+  // ==================== 2A. 塔罗牌卡日历（白天模式专用） ====================
+
+  /** 塔罗牌卡日历复用 orbitState、_updateGlow() 等共享全局状态。
+   *  上排12张月份符卡 → 下排日历网格选日期 → 月日选齐显示"揭晓"按钮。 */
+
+  /** 辅助：更新 Canvas 发光状态（白天模式独立副本，不依赖 initOrbit 作用域） */
+  function _updateGlow(signIndex, level) {
+    for (var i = 0; i < CONSTELLATIONS.length; i++) {
+      CONSTELLATIONS[i].glowLevel = 0;
+    }
+    if (signIndex >= 0 && signIndex < CONSTELLATIONS.length && level > 0) {
+      CONSTELLATIONS[signIndex].glowLevel = level;
+    }
+  }
+
+  function initTarot() {
+    var deck = document.getElementById('tarot-deck');
+    if (!deck) return;
+
+    var monthsEl = document.getElementById('tarot-months');
+    var calGrid  = document.getElementById('cal-grid');
+    var oracleEl = document.getElementById('tarot-oracle');
+    var hintEl   = document.getElementById('tarot-hint');
+    var confirmBtn = document.getElementById('tarot-confirm');
+    var resultEl  = document.getElementById('orbit-result');
+
+    if (!calGrid) return;
+
+    /* ---- 日历渲染 ---- */
+
+    /** 计算某月第一天是周几（1=一, 7=日） */
+    function firstWeekday(year, month) {
+      var d = new Date(year, month - 1, 1);
+      var w = d.getDay();
+      return w === 0 ? 7 : w;
+    }
+
+    function renderCalendar(month) {
+      var year = 2025; // 非闰年，用普通年份做日历骨架
+      var count = daysInMonth(month);
+      var fwd = firstWeekday(year, month);
+
+      calGrid.innerHTML = '';
+      var frag = document.createDocumentFragment();
+
+      // 前置空白占位
+      for (var b = 1; b < fwd; b++) {
+        var ph = document.createElement('div');
+        ph.className = 'cal-day placeholder';
+        frag.appendChild(ph);
+      }
+
+      // 日期卡片
+      for (var d = 1; d <= count; d++) {
+        var btn = document.createElement('button');
+        btn.className = 'cal-day';
+        btn.textContent = d;
+        btn.dataset.day = d;
+        btn.type = 'button';
+        frag.appendChild(btn);
+      }
+
+      calGrid.appendChild(frag);
+    }
+
+    /* ---- 高亮 ---- */
+
+    function syncMonths(month) {
+      monthsEl.querySelectorAll('.tarot-card').forEach(function (c) {
+        c.classList.remove('active', 'matched');
+        if (parseInt(c.dataset.month) === month) {
+          c.classList.add(orbitState.confirmed ? 'matched' : 'active');
+        }
+      });
+    }
+
+    function syncDayHighlight(day) {
+      calGrid.querySelectorAll('.cal-day').forEach(function (c) {
+        c.classList.remove('active', 'matched');
+        if (parseInt(c.dataset.day) === day) {
+          c.classList.add(orbitState.confirmed ? 'matched' : 'day-matched');
+        }
+      });
+    }
+
+    function clearAllHighlight() {
+      monthsEl.querySelectorAll('.tarot-card').forEach(function (c) { c.classList.remove('active', 'matched'); });
+      calGrid.querySelectorAll('.cal-day').forEach(function (c) { c.classList.remove('active', 'matched'); });
+    }
+
+    /* ---- 发光 + 提示 ---- */
+
+    function fireBeam(gold) {
+      if (orbitState.month > 0 && orbitState.day > 0 && typeof window._spawnStarBeam === 'function') {
+        window._spawnStarBeam(orbitState.activeSignIndex, gold);
+      }
+    }
+
+    function updateHint() {
+      hintEl.style.opacity = '';
+      var hm = orbitState.month > 0, hd = orbitState.day > 0;
+
+      if (hm && hd) {
+        var sign = getZodiacSign(orbitState.month, orbitState.day);
+        var idx = findConstellationIndex(sign.nameCN);
+        orbitState.activeSignIndex = idx;
+        _updateGlow(idx, 2);
+        hintEl.textContent = orbitState.month + '月' + orbitState.day + '日 · ' + sign.nameCN;
+        oracleEl.textContent = sign.emoji;
+        confirmBtn.style.display = '';
+        fireBeam(false);
+      } else if (hm) {
+        var names = MONTH_TO_SIGNS[orbitState.month];
+        var idx = findConstellationIndex(names[0]);
+        orbitState.activeSignIndex = idx;
+        _updateGlow(idx, 1);
+        hintEl.textContent = orbitState.month + '月 · 在日历中选一个日期';
+        oracleEl.textContent = '';
+        confirmBtn.style.display = 'none';
+      } else if (hd) {
+        orbitState.activeSignIndex = -1;
+        _updateGlow(-1, 0);
+        hintEl.textContent = orbitState.day + '日 · 再选一张月份符卡';
+        oracleEl.textContent = '';
+        confirmBtn.style.display = 'none';
+      } else {
+        orbitState.activeSignIndex = -1;
+        _updateGlow(-1, 0);
+        hintEl.textContent = '选择月份符卡，再在日历中选日期';
+        oracleEl.textContent = '';
+        confirmBtn.style.display = 'none';
+      }
+      if (window.twemoji) window.twemoji.parse(oracleEl);
+    }
+
+    /* ---- 月份符卡点击 ---- */
+    monthsEl.addEventListener('click', function (e) {
+      var card = e.target.closest('.tarot-card');
+      if (!card || !card.dataset.month || orbitState.confirmed) return;
+      clearAutoReset();
+      var m = parseInt(card.dataset.month);
+      orbitState.month = m;
+      renderCalendar(m);
+      if (orbitState.day > daysInMonth(m)) orbitState.day = 0;
+      syncMonths(m);
+      if (orbitState.day > 0) syncDayHighlight(orbitState.day);
+      updateHint();
+      scheduleAutoReset();
+    });
+
+    /* ---- 日历日期点击 ---- */
+    calGrid.addEventListener('click', function (e) {
+      var btn = e.target.closest('.cal-day');
+      if (!btn || !btn.dataset.day || orbitState.confirmed || btn.classList.contains('placeholder')) return;
+      clearAutoReset();
+      orbitState.day = parseInt(btn.dataset.day);
+      syncDayHighlight(orbitState.day);
+      updateHint();
+      scheduleAutoReset();
+    });
+
+    /* ---- 揭晓 ---- */
+    function doConfirm() {
+      if (orbitState.month <= 0 || orbitState.day <= 0) return;
+      clearAutoReset();
+      orbitState.confirmed = true;
+      var sign = getZodiacSign(orbitState.month, orbitState.day);
+      orbitState.activeSignIndex = findConstellationIndex(sign.nameCN);
+      _updateGlow(orbitState.activeSignIndex, 3);
+      if (typeof window._spawnCelebrate === 'function') window._spawnCelebrate(orbitState.activeSignIndex);
+      syncMonths(orbitState.month);
+      syncDayHighlight(orbitState.day);
+      fireBeam(true);
+      confirmBtn.style.display = 'none';
+      hintEl.style.opacity = '0';
+      oracleEl.textContent = sign.emoji;
+      if (window.twemoji) window.twemoji.parse(oracleEl);
+      resultEl.style.display = '';
+      resultEl.innerHTML =
+        '<span class="orbit-result-emoji">' + sign.emoji + '</span> ' +
+        '<strong>' + sign.nameCN + '</strong> · ' +
+        formatDateRange(sign) + ' · ' + sign.element + '象 · ' + sign.planet +
+        ' <button class="orbit-redo" id="orbit-redo" type="button">重新选择</button>';
+      if (window.twemoji) window.twemoji.parse(resultEl);
+      if (typeof setFortuneSign === 'function') setFortuneSign(sign);
+    }
+
+    confirmBtn.addEventListener('click', doConfirm);
+    confirmBtn.addEventListener('touchend', function (e) { e.preventDefault(); doConfirm(); });
+
+    /* ---- 重新选择 ---- */
+    resultEl.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && (t.id === 'orbit-redo' || (t.parentNode && t.parentNode.id === 'orbit-redo'))) resetState();
+    });
+
+    function resetState() {
+      clearAutoReset();
+      orbitState.month = 0;
+      orbitState.day = 0;
+      orbitState.activeSignIndex = -1;
+      orbitState.confirmed = false;
+      _updateGlow(-1, 0);
+      clearAllHighlight();
+      renderCalendar(1);
+      confirmBtn.style.display = 'none';
+      resultEl.style.display = 'none';
+      resultEl.innerHTML = '';
+      hintEl.style.opacity = '';
+      hintEl.textContent = '选择月份符卡，再在日历中选日期';
+      oracleEl.textContent = '';
+    }
+
+    /* ---- 自动复位 ---- */
+    var _arTimer = null;
+    function clearAutoReset() { if (_arTimer) { clearTimeout(_arTimer); _arTimer = null; } }
+    function scheduleAutoReset() { clearAutoReset(); _arTimer = setTimeout(resetState, 12000); }
+
+    /* ---- 启动 ---- */
+    renderCalendar(1);
+
+    setTimeout(function () {
+      if (!orbitState.month && !orbitState.confirmed) hintEl.style.opacity = '0.3';
+    }, 8000);
+  }
+
+  // ==================== 2B. 星环日轨（夜间模式专用） ====================
 
   /** 日轨全局状态（供 Canvas 发光渲染读取） */
   var orbitState = {
@@ -285,7 +511,7 @@
     var innerGroup = document.getElementById('orbit-inner-group');
     var confirmBtn = document.getElementById('orbit-confirm');
     var hintEl = document.getElementById('orbit-hint');
-    var resultEl = document.getElementById('orbit-result');
+    var resultEl = document.getElementById('orbit-result-ring');
     var centerLabel = document.getElementById('orbit-center-label');
     var sparkOuter = document.getElementById('orbit-spark-outer');
     var sparkInner = document.getElementById('orbit-spark-inner');
@@ -1343,7 +1569,32 @@
   function init() {
     initFortune();
     initStars();   // 必须先初始化星空（CONSTELLATIONS），供日轨查询
-    initOrbit();
+
+    // 日夜双模：白天用塔罗符卡，夜间用星环
+    var isNight = document.documentElement.classList.contains('night-mode');
+    if (isNight) {
+      var deck = document.getElementById('tarot-deck');
+      var orbitRing = document.getElementById('orbit-ring');
+      if (deck) deck.style.display = 'none';
+      if (orbitRing) orbitRing.style.display = '';
+      initOrbit();
+    } else {
+      initTarot();
+    }
+
+    // 暴露全局切换函数供 main.js 中日夜切换调用
+    window._onThemeSwitch = function (toNight) {
+      var deck = document.getElementById('tarot-deck');
+      var orbitRing = document.getElementById('orbit-ring');
+      if (toNight) {
+        if (deck) deck.style.display = 'none';
+        if (orbitRing) { orbitRing.style.display = ''; initOrbit(); }
+      } else {
+        if (orbitRing) orbitRing.style.display = 'none';
+        if (deck) { deck.style.display = ''; initTarot(); }
+      }
+    };
+
     initScrollBehavior();
   }
 

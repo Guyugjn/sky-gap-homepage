@@ -1121,6 +1121,9 @@
       }, 2200);
     }
     root.classList.toggle('night-mode', isNight);
+    if (typeof window._onThemeSwitch === 'function') {
+      window._onThemeSwitch(isNight);
+    }
   }
 
   function initNightMode() {
