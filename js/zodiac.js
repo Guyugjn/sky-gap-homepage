@@ -127,6 +127,25 @@
       if (pctEl) pctEl.textContent = pct;
     });
 
+    // 星座信息
+    var elElement = document.getElementById('sign-info-element');
+    var secEl = document.getElementById('sign-info-secondary');
+    var ELEM_EMOJI = { '火': '🔥', '土': '🪨', '风': '🌬️', '水': '💧' };
+    var PLANET_EMOJI = { '火星': '♂️', '金星': '♀️', '水星': '☿', '月亮': '☾', '太阳': '☉', '冥王星': '♇', '木星': '♃', '土星': '♄', '天王星': '♅', '海王星': '♆' };
+    if (elElement) {
+      var emoji = ELEM_EMOJI[sign.element] || '';
+      elElement.textContent = (emoji ? emoji + ' ' : '') + sign.element + '象';
+    }
+    if (secEl) {
+      var pEmoji = PLANET_EMOJI[sign.planet] || '';
+      secEl.textContent = (pEmoji ? pEmoji + ' ' : '') + sign.planet + ' · ' + formatDateRange(sign);
+    }
+    // Twemoji 解析星座信息中的元素/行星 emoji
+    if (window.twemoji) {
+      if (elElement) window.twemoji.parse(elElement);
+      if (secEl) window.twemoji.parse(secEl);
+    }
+
     // 概述
     var summary = (data.fortunetext && data.fortunetext.all) || data.shortcomment || '';
     document.getElementById('fortune-summary').textContent = stripSource(summary);
@@ -263,6 +282,11 @@
 
     if (!calGrid) return;
 
+    /* ---- 获取今天的真实日期用于强化提示 ---- */
+    var today = new Date();
+    var todayMonth = today.getMonth() + 1; // 1-12
+    var todayDay = today.getDate();       // 1-31
+
     /* ---- 日历渲染 ---- */
 
     /** 计算某月第一天是周几（1=一, 7=日） */
@@ -276,6 +300,7 @@
       var year = 2025; // 非闰年，用普通年份做日历骨架
       var count = daysInMonth(month);
       var fwd = firstWeekday(year, month);
+      var isCurrentMonth = (month === todayMonth);
 
       calGrid.innerHTML = '';
       var frag = document.createDocumentFragment();
@@ -294,6 +319,10 @@
         btn.textContent = d;
         btn.dataset.day = d;
         btn.type = 'button';
+        // 今日强化提示：所在月份且日期匹配时加边框+加粗
+        if (isCurrentMonth && d === todayDay) {
+          btn.classList.add('today');
+        }
         frag.appendChild(btn);
       }
 
@@ -315,7 +344,7 @@
       calGrid.querySelectorAll('.cal-day').forEach(function (c) {
         c.classList.remove('active', 'matched');
         if (parseInt(c.dataset.day) === day) {
-          c.classList.add(orbitState.confirmed ? 'matched' : 'day-matched');
+          c.classList.add(orbitState.confirmed ? 'matched' : 'active');
         }
       });
     }
@@ -410,26 +439,16 @@
       fireBeam(true);
       confirmBtn.style.display = 'none';
       hintEl.style.opacity = '0';
-      oracleEl.textContent = sign.emoji;
-      if (window.twemoji) window.twemoji.parse(oracleEl);
+      oracleEl.textContent = '';
       resultEl.style.display = '';
       resultEl.innerHTML =
-        '<span class="orbit-result-emoji">' + sign.emoji + '</span> ' +
-        '<strong>' + sign.nameCN + '</strong> · ' +
-        formatDateRange(sign) + ' · ' + sign.element + '象 · ' + sign.planet +
-        ' <button class="orbit-redo" id="orbit-redo" type="button">重新选择</button>';
+        '<button class="orbit-redo" id="orbit-redo" type="button">重新选择</button>';
       if (window.twemoji) window.twemoji.parse(resultEl);
       if (typeof setFortuneSign === 'function') setFortuneSign(sign);
     }
 
     confirmBtn.addEventListener('click', doConfirm);
     confirmBtn.addEventListener('touchend', function (e) { e.preventDefault(); doConfirm(); });
-
-    /* ---- 重新选择 ---- */
-    resultEl.addEventListener('click', function (e) {
-      var t = e.target;
-      if (t && (t.id === 'orbit-redo' || (t.parentNode && t.parentNode.id === 'orbit-redo'))) resetState();
-    });
 
     function resetState() {
       clearAutoReset();
@@ -447,6 +466,14 @@
       hintEl.textContent = '选择月份符卡，再在日历中选日期';
       oracleEl.textContent = '';
     }
+
+    // 暴露白天 resetState 给公共重新选择按钮
+    window._resetTarotSelection = resetState;
+
+    /* ---- 重新选择按钮事件 ---- */
+    resultEl.addEventListener('click', function (e) {
+      if (e.target && (e.target.id === 'orbit-redo' || (e.target.parentNode && e.target.parentNode.id === 'orbit-redo'))) resetState();
+    });
 
     /* ---- 自动复位 ---- */
     var _arTimer = null;
@@ -807,17 +834,12 @@
       fireStarBeam(true);
       pulseCenterLabel();
 
-      // 隐藏确认按钮、提示，显示结果（含「重新选择」按钮 — 显式复位入口）
+      // 隐藏确认按钮、提示，显示结果
       confirmBtn.style.display = 'none';
       hintEl.style.opacity = '0';
       resultEl.style.display = '';
       resultEl.innerHTML =
-        '<span class="orbit-result-emoji">' + sign.emoji + '</span> ' +
-        '<strong>' + sign.nameCN + '</strong> · ' +
-        formatDateRange(sign) + ' · ' + sign.element + '象 · ' + sign.planet +
-        ' <button class="orbit-redo" id="orbit-redo" type="button">重新选择</button>';
-      /* Twemoji 重新解析 — 确认后的星座符号 */
-      if (window.twemoji) window.twemoji.parse(resultEl);
+        '<button class="orbit-redo" id="orbit-redo" type="button">重新选择</button>';
       syncCenterLabel();
 
       // 切换运势为访客星座
@@ -845,6 +867,9 @@
       hideSpark(sparkInner);
       syncCenterLabel();
     }
+
+    // 夜间模式覆盖公共重新选择（因为夜间优先初始化）
+    window._resetTarotSelection = resetState;
 
     // ---- 事件绑定 ----
     var autoResetTimer = null;
@@ -932,12 +957,10 @@
       confirmSign();
     });
 
-    // 结果面板中的「重新选择」按钮 — 显式复位入口（按钮由 confirmSign 动态生成，委托绑定）
+    // 结果面板 — 重新选择
     resultEl.addEventListener('click', function (e) {
       var t = e.target;
-      if (t && (t.id === 'orbit-redo' || (t.parentNode && t.parentNode.id === 'orbit-redo'))) {
-        resetState();
-      }
+      if (t && t.id === 'orbit-redo') resetState();
     });
 
     // 初始提示 8s 后渐隐
@@ -1584,6 +1607,12 @@
 
     // 暴露全局切换函数供 main.js 中日夜切换调用
     window._onThemeSwitch = function (toNight) {
+      // 切换模式时清空共享状态，避免白天/夜间互相影响
+      orbitState.month = 0;
+      orbitState.day = 0;
+      orbitState.activeSignIndex = -1;
+      orbitState.confirmed = false;
+      _updateGlow(-1, 0);
       var deck = document.getElementById('tarot-deck');
       var orbitRing = document.getElementById('orbit-ring');
       if (toNight) {

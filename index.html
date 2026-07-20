@@ -253,8 +253,8 @@
 
       <!-- 白天模式：塔罗符卡日期选择（上排月符卡 + 下排日符卡） -->
       <div class="tarot-deck" id="tarot-deck">
-        <!-- 上层：12 张月份符卡 -->
-        <div class="tarot-row tarot-months" id="tarot-months">
+        <!-- 星座选择区：12 张塔罗牌卡，grid-cols-6 两行 -->
+        <div class="tarot-zodiac-grid" id="tarot-months">
           <button class="tarot-card" data-month="1"><span class="tarot-glyph">♑</span><span class="tarot-label">1月</span></button>
           <button class="tarot-card" data-month="2"><span class="tarot-glyph">♒</span><span class="tarot-label">2月</span></button>
           <button class="tarot-card" data-month="3"><span class="tarot-glyph">♓</span><span class="tarot-label">3月</span></button>
@@ -268,7 +268,7 @@
           <button class="tarot-card" data-month="11"><span class="tarot-glyph">♏</span><span class="tarot-label">11月</span></button>
           <button class="tarot-card" data-month="12"><span class="tarot-glyph">♐</span><span class="tarot-label">12月</span></button>
         </div>
-        <!-- 下层：日期塔罗牌卡日历 -->
+        <!-- 日历区：统一 grid-cols-7 包裹星期和日期（相同列宽保证完美对齐） -->
         <div class="tarot-calendar" id="tarot-calendar">
           <div class="cal-weekdays">
             <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
@@ -369,6 +369,10 @@
               <div class="fortune-idx"><span class="idx-label">工作</span><span class="idx-bar"><span class="idx-fill" id="idx-work"></span></span><span class="idx-pct" id="idx-work-pct">84%</span></div>
               <div class="fortune-idx"><span class="idx-label">财富</span><span class="idx-bar"><span class="idx-fill" id="idx-money"></span></span><span class="idx-pct" id="idx-money-pct">36%</span></div>
               <div class="fortune-idx"><span class="idx-label">健康</span><span class="idx-bar"><span class="idx-fill" id="idx-health"></span></span><span class="idx-pct" id="idx-health-pct">52%</span></div>
+              <div class="fortune-sign-info" id="fortune-sign-info">
+                <div class="sign-info-line sign-info-element" id="sign-info-element">火象</div>
+                <div class="sign-info-line sign-info-secondary" id="sign-info-secondary">金星 · 4.20 – 5.20</div>
+              </div>
             </div>
             <div class="fortune-main">
               <!-- 概述 -->
