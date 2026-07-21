@@ -160,6 +160,50 @@
     document.body.removeChild(textarea);
   }
 
+  // ==================== 通用滑块工厂（重构进度条和音量条的拖拽逻辑） ====================
+
+  function createSlider(container, onChange) {
+    var dragging = false;
+
+    function getPct(e) {
+      var rect = container.getBoundingClientRect();
+      var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      return Math.max(0, Math.min(1, x / rect.width));
+    }
+
+    function onDown(e) {
+      e.preventDefault();
+      dragging = true;
+      onChange(getPct(e), true);
+    }
+
+    function onMove(e) {
+      if (dragging) onChange(getPct(e));
+    }
+
+    function onUp() {
+      if (dragging) { dragging = false; onChange(-1, false); }
+    }
+
+    container.addEventListener('mousedown', onDown);
+    container.addEventListener('touchstart', onDown, { passive: false });
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+
+    return {
+      destroy: function () {
+        container.removeEventListener('mousedown', onDown);
+        container.removeEventListener('touchstart', onDown);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchend', onUp);
+      }
+    };
+  }
+
   // ==================== 1. 光粒子系统 ====================
 
   function initParticles() {
@@ -261,6 +305,8 @@
 
   function initParallax() {
     if (!cursorFish) return;
+
+    var isMobile = window.innerWidth <= 768;
 
     var pupil = cursorFish.querySelector('.fish-eye-pupil');
     var shine = cursorFish.querySelector('.fish-eye-shine');
@@ -431,9 +477,10 @@
       }
     }
 
-    // 点击任意位置 → 涟漪 + 鱼在范围内则逃跑
+    // 点击任意位置 → 涟漪 + 鱼在范围内则逃跑（移动端无交互）
     var FISH_SCARE_RANGE = 100; // 鱼受惊范围（px）
     document.addEventListener('click', function (e) {
+      if (isMobile) return;
       // 涟漪
       var ripple = document.createElement('div');
       ripple.className = 'click-ripple';
@@ -460,8 +507,9 @@
       }
     });
 
-    // 鼠标移动 → 记录活跃时间 + 更新目标位置
+    // 鼠标移动 → 记录活跃时间 + 更新目标位置（移动端跳过，只做自主漫游）
     document.addEventListener('mousemove', function (e) {
+      if (isMobile) return;
       lastMouseActivity = Date.now();
       targetMouseX = e.clientX;
       targetMouseY = e.clientY;
@@ -677,8 +725,8 @@
     });
 
     audio.addEventListener('waiting', function () {
-      // 播放过程中缓冲不足时显示
-      if (isPlaying) showLoadingLabel('缓冲中…');
+      // 播放过程中缓冲不足时显示（拖拽进度条时跳过，避免闪烁"缓冲中…"）
+      if (isPlaying && !progressSeeking) showLoadingLabel('缓冲中…');
     });
 
     audio.addEventListener('playing', function () {
@@ -714,43 +762,13 @@
 
     // === 进度条点击/拖拽跳转 ===
     if (progressBar) {
-      var dragging = false;
-
-      function seekFromEvent(e) {
-        if (!audio.duration) return;
-        var rect = progressBar.getBoundingClientRect();
-        var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-        var pct = Math.max(0, Math.min(1, x / rect.width));
+      var progressSeeking = false;
+      createSlider(progressBar, function (pct, isDown) {
+        if (!audio.duration || pct < 0) return;
         progressSeeking = true;
         audio.currentTime = pct * audio.duration;
         progressFill.style.width = (pct * 100) + '%';
-      }
-
-      progressBar.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-        dragging = true;
-        seekFromEvent(e);
-      });
-
-      progressBar.addEventListener('touchstart', function (e) {
-        dragging = true;
-        seekFromEvent(e);
-      }, { passive: false });
-
-      document.addEventListener('mousemove', function (e) {
-        if (dragging) seekFromEvent(e);
-      });
-
-      document.addEventListener('touchmove', function (e) {
-        if (dragging) seekFromEvent(e);
-      }, { passive: false });
-
-      document.addEventListener('mouseup', function () {
-        if (dragging) { dragging = false; progressSeeking = false; }
-      });
-
-      document.addEventListener('touchend', function () {
-        if (dragging) { dragging = false; progressSeeking = false; }
+        if (!isDown) progressSeeking = false;
       });
     }
 
@@ -968,46 +986,15 @@
       updateVolumeIcon(vol);
     }
 
-    // 自定义拖拽（和进度条同样的系统）
+    // 自定义拖拽（用 createSlider 工厂）
     if (volumeBar) {
-      var volDragging = false;
-
-      function volSeekFromEvent(e) {
-        var rect = volumeBar.getBoundingClientRect();
-        var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-        var pct = Math.max(0, Math.min(1, x / rect.width));
+      createSlider(volumeBar, function (pct) {
+        if (pct < 0) return;
         volume = pct;
         audio.volume = volume;
         volumeFill.style.width = (pct * 100) + '%';
         if (volumePct) volumePct.textContent = Math.round(pct * 100) + '%';
         updateVolumeIcon(volume);
-      }
-
-      volumeBar.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-        volDragging = true;
-        volSeekFromEvent(e);
-      });
-
-      volumeBar.addEventListener('touchstart', function (e) {
-        volDragging = true;
-        volSeekFromEvent(e);
-      }, { passive: false });
-
-      document.addEventListener('mousemove', function (e) {
-        if (volDragging) volSeekFromEvent(e);
-      });
-
-      document.addEventListener('touchmove', function (e) {
-        if (volDragging) volSeekFromEvent(e);
-      }, { passive: false });
-
-      document.addEventListener('mouseup', function () {
-        volDragging = false;
-      });
-
-      document.addEventListener('touchend', function () {
-        volDragging = false;
       });
     }
 
@@ -1143,8 +1130,9 @@
 
     function update() {
       if (_nightManual) return; // 手动模式覆盖自动
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       var hour = new Date().getHours();
-      var isNight = hour >= 19 || hour < 6;
+      var isNight = prefersDark || hour >= 19 || hour < 6;
       applyNight(isNight, !firstRun);
       firstRun = false;
       updateIcon();

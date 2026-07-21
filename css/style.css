@@ -28,13 +28,16 @@
   --sky-mid: #B0D2E7;
   --sky-bot: #8DBAD3;
   /* 文字层级 */
-  --text-primary: #1E3B4D;
-  --text-secondary: #5A8A9F;
-  --text-muted: #88A8B8;
+  --text-primary: #0F2A3D;
+  --text-secondary: #3A6A80;
+  --text-muted: #6E90A0;
   /* 强调色 */
   --accent: #89C4E1;
   --accent-hover: #6DB3D4;
   --warm-accent: #E8B860;
+  /* 强调色层级 */
+  --accent-soft: rgba(137, 196, 225, 0.25);
+  --accent-glow: rgba(137, 196, 225, 0.45);
   /* 光晕 */
   --glow-color: rgba(168, 212, 232, 0.5);
   /* 星图粒子调色 — 白天偏浅蓝半透，叠在浅蓝纯色底上若隐若现 */
@@ -43,8 +46,8 @@
   --star-meteor-rgb: 190, 215, 230;   /* 流星拖尾 */
   --cloud-white: rgba(255, 255, 255, 0.75);
   /* 卡片 */
-  --card-bg: rgba(255, 255, 255, 0.58);
-  --card-border: rgba(255, 255, 255, 0.4);
+  --card-bg: rgba(255, 255, 255, 0.72);
+  --card-border: rgba(255, 255, 255, 0.55);
   /* 字体 */
   --font-display: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', cursive, serif;
   --font-cn: "PingFang SC", "Microsoft YaHei", "微软雅黑", "Noto Sans SC", system-ui, sans-serif;
@@ -272,6 +275,7 @@ body {
   filter:
     drop-shadow(0 0 10px rgba(137, 196, 225, 0.45))
     drop-shadow(0 0 3px  rgba(232, 244, 253, 0.5));
+  will-change: transform, left, top;
 }
 
 .cursor-fish.visible {
@@ -478,6 +482,16 @@ body {
   background: linear-gradient(135deg, var(--sky-mid), var(--accent));
 }
 
+/* 头像加载失败时隐藏 */
+.avatar.is-error {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.avatar:not(.is-error) {
+  z-index: 1;
+}
+
 /* 头像占位（没有图片时显示） */
 .avatar-placeholder {
   width: 100%;
@@ -490,7 +504,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 1;
+  z-index: 0;
 }
 
 .avatar-placeholder span {
@@ -613,8 +627,7 @@ body {
   box-shadow: 0 4px 24px rgba(30, 59, 77, 0.08);
   margin-top: 0.8rem;
   margin-bottom: 0.5rem;
-  width: 300px;
-  max-width: calc(100vw - 2rem);
+  width: min(300px, 92vw);
   transition:
     opacity 0.35s var(--ease-premium),
     box-shadow 0.4s var(--ease-premium),
@@ -737,7 +750,7 @@ body {
   position: relative;
 }
 .playlist-item:hover {
-  background: rgba(137, 196, 225, 0.1);
+  background: var(--accent-soft);
   color: var(--text-primary);
 }
 /* 序号 */
@@ -963,7 +976,7 @@ body {
   right: 0;
   transform: translateY(-50%);
   height: 4px;
-  background: rgba(168, 212, 232, 0.35);
+  background: var(--accent-soft);
   border-radius: 2px;
 }
 
@@ -1042,7 +1055,7 @@ body {
   right: 0;
   transform: translateY(-50%);
   height: 4px;
-  background: rgba(168, 212, 232, 0.35);
+  background: var(--accent-soft);
   border-radius: 2px;
 }
 
@@ -1130,8 +1143,8 @@ body {
   position: relative;
   z-index: 1;
   text-align: center;
-  padding: 3rem 2rem 2.5rem;
-  margin-top: 3rem;
+  padding: 3rem 2rem max(2.5rem, env(safe-area-inset-bottom));
+  margin-top: 5rem;
 }
 
 .footer-divider {
@@ -1367,9 +1380,9 @@ html.night-mode .starchart-canvas {
 
 .zodiac-title-text {
   font-family: var(--font-display);
-  font-size: 4.2rem;
+  font-size: clamp(2.4rem, 5vw, 3.6rem);
   font-weight: 400;
-  letter-spacing: 0.4em;
+  letter-spacing: clamp(0.2em, 1vw, 0.4em);
   margin: 0;
   color: var(--text-primary);
   /* 浅蓝微光晕，不喧宾夺主 */
@@ -1445,7 +1458,7 @@ html.night-mode .starchart-canvas {
   grid-template-columns: repeat(6, 1fr);
   gap: 0.65rem;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   margin: 0 auto;
 }
 
@@ -1556,9 +1569,9 @@ html.night-mode .starchart-canvas {
 /* ---- 响应式：移动端 4 列 ---- */
 @media (max-width: 480px) {
   .tarot-zodiac-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
-    max-width: 320px;
+    max-width: 300px;
   }
   .tarot-glyph { font-size: 1.15rem; }
   .tarot-card { border-radius: 14px; }
@@ -2226,7 +2239,7 @@ html.night-mode .zodiac-grid {
 
 .fortune-tab {
   border: none;
-  background: rgba(137, 196, 225, 0.2);
+  background: var(--accent-soft);
   color: var(--text-secondary);
   font-size: 0.75rem;
   padding: 0.3rem 0.65rem;
@@ -2237,7 +2250,7 @@ html.night-mode .zodiac-grid {
 }
 
 .fortune-tab:hover {
-  background: rgba(137, 196, 225, 0.35);
+  background: var(--accent-glow);
   color: var(--text-primary);
   transform: scale(1.06);
 }
@@ -2286,7 +2299,7 @@ html.night-mode .zodiac-grid {
 .idx-bar {
   flex: 1;
   height: 6px;
-  background: rgba(137, 196, 225, 0.25);
+  background: var(--accent-soft);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -2425,15 +2438,9 @@ html.night-mode .zodiac-grid {
   }
 
   .zodiac-container {
-    height: 100vh;
-    height: 100dvh;
-    /* 移动端让内容不要顶边 */
-    padding: 2rem 1rem;
-  }
-
-  .zodiac-title-text {
-    font-size: 2.6rem;
-    letter-spacing: 0.3em;
+    min-height: 100dvh;
+    padding: 3rem 1rem 5rem;
+    justify-content: flex-start;
   }
 
   .zodiac-title-deco {
@@ -2473,14 +2480,24 @@ html.night-mode .zodiac-grid {
   .zodiac-grid {
     margin-top: 2.5rem;
   }
+}
 
+/* 桌面端运势双栏布局 */
+@media (min-width: 769px) {
+  .fortune-body {
+    grid-template-columns: 220px 1fr;
+    gap: 2rem;
+  }
+}
+
+/* 移动端单列布局 */
+@media (max-width: 768px) {
   /* 运势头部 — 竖排 */
   .fortune-header {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  /* 运势主体 — 竖排 + 抽屉折叠 */
   .fortune-body {
     grid-template-columns: 1fr;
     gap: 0.8rem;
@@ -2634,6 +2651,32 @@ html.night-mode .zodiac-grid {
 }
 
 /* ============================================
+   backdrop-filter 降级支持
+   ============================================ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .music-player,
+  .social-link,
+  .tarot-card,
+  .cal-day,
+  .orbit-redo,
+  .fortune-tab,
+  .toast,
+  .social-tip,
+  .mode-tip {
+    background: rgba(255, 255, 255, 0.85) !important;
+  }
+  html.night-mode .music-player,
+  html.night-mode .social-link,
+  html.night-mode .orbit-redo,
+  html.night-mode .fortune-tab,
+  html.night-mode .toast,
+  html.night-mode .social-tip,
+  html.night-mode .mode-tip {
+    background: rgba(25, 45, 70, 0.92) !important;
+  }
+}
+
+/* ============================================
    深夜模式 — 19:00–06:00 自动切换深蓝夜空
    ============================================ */
 
@@ -2661,11 +2704,11 @@ html.night-mode {
   --sky-bot: #1C3358;
   /* 文字 — 浅色保证可读性 */
   --text-primary: #CFDFF0;
-  --text-secondary: #8AACC8;
+  --text-secondary: #A0C0D8;
   --text-muted: #5E7A94;
   /* 卡片 — 深色毛玻璃 */
-  --card-bg: rgba(20, 38, 60, 0.55);
-  --card-border: rgba(255, 255, 255, 0.1);
+  --card-bg: rgba(16, 32, 52, 0.78);
+  --card-border: rgba(255, 255, 255, 0.12);
   /* 光晕和云层 */
   --glow-color: rgba(100, 160, 210, 0.5);
   --cloud-white: rgba(180, 200, 230, 0.3);
@@ -2715,6 +2758,12 @@ html.night-mode .orbit-confirm {
 html.night-mode .orbit-svg {
   filter: drop-shadow(0 0 6px rgba(120, 170, 210, 0.15));
 }
+/* 重新选择按钮 — 夜间使用深色毛玻璃底，浅色文字 */
+html.night-mode .orbit-redo {
+  background: rgba(25, 45, 70, 0.75);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+}
 /* 运势抽屉 — 夜间微调 */
 html.night-mode .fortune-header-left::after {
   color: rgba(140, 180, 210, 0.5);
@@ -2753,10 +2802,11 @@ html.night-mode .volume-bar-wrap::before {
 }
 html.night-mode .progress-fill::after,
 html.night-mode .volume-fill::after {
-  background: #D8E8F8;
+  background: #fff;
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.4),
-    0 0 0 2px var(--accent-hover);
+    0 0 0 2px var(--accent-hover),
+    0 0 8px var(--accent-glow);
 }
 html.night-mode .progress-bar:hover .progress-fill::after,
 html.night-mode .volume-bar-wrap:hover .volume-fill::after {

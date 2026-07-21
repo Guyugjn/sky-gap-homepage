@@ -6,6 +6,9 @@
 (function () {
   'use strict';
 
+  var _tarotInited = false;
+  var _orbitInited = false;
+
   // ==================== 星座数据 ====================
 
   const ZODIAC = [
@@ -270,6 +273,7 @@
   }
 
   function initTarot() {
+    if (_tarotInited) return;
     var deck = document.getElementById('tarot-deck');
     if (!deck) return;
 
@@ -297,7 +301,7 @@
     }
 
     function renderCalendar(month) {
-      var year = 2025; // 非闰年，用普通年份做日历骨架
+      var year = new Date().getFullYear();
       var count = daysInMonth(month);
       var fwd = firstWeekday(year, month);
       var isCurrentMonth = (month === todayMonth);
@@ -467,8 +471,8 @@
       oracleEl.textContent = '';
     }
 
-    // 暴露白天 resetState 给公共重新选择按钮
-    window._resetTarotSelection = resetState;
+    // 暴露白天 resetState 给主题切换调用
+    window._resetTarot = resetState;
 
     /* ---- 重新选择按钮事件 ---- */
     resultEl.addEventListener('click', function (e) {
@@ -486,6 +490,7 @@
     setTimeout(function () {
       if (!orbitState.month && !orbitState.confirmed) hintEl.style.opacity = '0.3';
     }, 8000);
+    _tarotInited = true;
   }
 
   // ==================== 2B. 星环日轨（夜间模式专用） ====================
@@ -531,6 +536,7 @@
   }
 
   function initOrbit() {
+    if (_orbitInited) return;
     var orbitRing = document.getElementById('orbit-ring');
     var outerNodes = document.getElementById('orbit-outer-nodes');
     var innerNodes = document.getElementById('orbit-inner-nodes');
@@ -564,6 +570,7 @@
 
     /** 持续自转 — 注册到全局 rAF 调度（main.js _globalLoop） */
     function rotTick() {
+      if (orbitRing.style.display === 'none') return;
       outerRot += DRIFT_OUTER;
       innerRot += DRIFT_INNER;
       // 角度防溢出归一（页面长时间挂机）
@@ -868,8 +875,8 @@
       syncCenterLabel();
     }
 
-    // 夜间模式覆盖公共重新选择（因为夜间优先初始化）
-    window._resetTarotSelection = resetState;
+    // 夜间模式覆盖公共重新选择
+    window._resetOrbit = resetState;
 
     // ---- 事件绑定 ----
     var autoResetTimer = null;
@@ -969,6 +976,7 @@
         hintEl.style.opacity = '0.3';
       }
     }, 8000);
+    _orbitInited = true;
   }
 
   // ==================== 3. 星空粒子网络 ====================
@@ -1507,6 +1515,7 @@
 
     function tick(ts) {
       if (W <= 0 || H <= 0) return;
+      if (getComputedStyle(canvas).display === 'none') return;
       lerpTheme();
       update(ts);
       draw(ts);
@@ -1605,8 +1614,12 @@
       initTarot();
     }
 
-    // 暴露全局切换函数供 main.js 中日夜切换调用
+    // 暴露全局切换函数供 main.js 中日夜切换调用（切换仅做状态重置和显隐控制，不再重新初始化）
     window._onThemeSwitch = function (toNight) {
+      // 模式未实际变化时跳过（防止自动定时器每分钟触发重置）
+      if (toNight === window._lastNightMode) return;
+      window._lastNightMode = toNight;
+
       // 切换模式时清空共享状态，避免白天/夜间互相影响
       orbitState.month = 0;
       orbitState.day = 0;
@@ -1617,12 +1630,16 @@
       var orbitRing = document.getElementById('orbit-ring');
       if (toNight) {
         if (deck) deck.style.display = 'none';
-        if (orbitRing) { orbitRing.style.display = ''; initOrbit(); }
+        if (orbitRing) orbitRing.style.display = '';
+        if (!_orbitInited) { initOrbit(); } else { if (typeof window._resetOrbit === 'function') window._resetOrbit(); }
       } else {
         if (orbitRing) orbitRing.style.display = 'none';
-        if (deck) { deck.style.display = ''; initTarot(); }
+        if (deck) deck.style.display = '';
+        if (!_tarotInited) { initTarot(); } else { if (typeof window._resetTarot === 'function') window._resetTarot(); }
       }
     };
+    // 记录当前模式，防止下次自动检测时误触发重置
+    window._lastNightMode = isNight;
 
     initScrollBehavior();
   }
