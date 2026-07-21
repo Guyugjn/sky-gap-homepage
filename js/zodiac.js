@@ -8,6 +8,7 @@
 
   var _tarotInited = false;
   var _orbitInited = false;
+  var _canvasVisible = true;
 
   // ==================== 星座数据 ====================
 
@@ -278,59 +279,52 @@
     if (!deck) return;
 
     var monthsEl = document.getElementById('tarot-months');
-    var calGrid  = document.getElementById('cal-grid');
+    var dayGrid  = document.getElementById('day-grid');
     var oracleEl = document.getElementById('tarot-oracle');
     var hintEl   = document.getElementById('tarot-hint');
     var confirmBtn = document.getElementById('tarot-confirm');
     var resultEl  = document.getElementById('orbit-result');
 
-    if (!calGrid) return;
+    if (!dayGrid) return;
 
-    /* ---- 获取今天的真实日期用于强化提示 ---- */
+    /* ---- 获取今天的真实日期 ---- */
     var today = new Date();
-    var todayMonth = today.getMonth() + 1; // 1-12
-    var todayDay = today.getDate();       // 1-31
+    var todayMonth = today.getMonth() + 1;
+    var todayDay = today.getDate();
 
-    /* ---- 日历渲染 ---- */
+    /* ---- 渲染日期星丸 ---- */
 
-    /** 计算某月第一天是周几（1=一, 7=日） */
-    function firstWeekday(year, month) {
-      var d = new Date(year, month - 1, 1);
-      var w = d.getDay();
-      return w === 0 ? 7 : w;
-    }
-
-    function renderCalendar(month) {
-      var year = new Date().getFullYear();
-      var count = daysInMonth(month);
-      var fwd = firstWeekday(year, month);
-      var isCurrentMonth = (month === todayMonth);
-
-      calGrid.innerHTML = '';
+    function renderDayPills() {
+      dayGrid.innerHTML = '';
       var frag = document.createDocumentFragment();
 
-      // 前置空白占位
-      for (var b = 1; b < fwd; b++) {
-        var ph = document.createElement('div');
-        ph.className = 'cal-day placeholder';
-        frag.appendChild(ph);
-      }
-
-      // 日期卡片
-      for (var d = 1; d <= count; d++) {
+      for (var d = 1; d <= 31; d++) {
         var btn = document.createElement('button');
-        btn.className = 'cal-day';
+        btn.className = 'day-pill';
         btn.textContent = d;
         btn.dataset.day = d;
         btn.type = 'button';
-        // 今日强化提示：所在月份且日期匹配时加边框+加粗
-        if (isCurrentMonth && d === todayDay) {
-          btn.classList.add('today');
-        }
         frag.appendChild(btn);
       }
 
-      calGrid.appendChild(frag);
+      dayGrid.appendChild(frag);
+    }
+
+    /** 根据选中月份 dim 超出天数并同步今日标记 */
+    function syncDayDim(month) {
+      if (month <= 0) {
+        // 未选月份：清除所有 dim 和 today
+        dayGrid.querySelectorAll('.day-pill').forEach(function (btn) {
+          btn.classList.remove('dimmed', 'today');
+        });
+        return;
+      }
+      var maxDay = daysInMonth(month);
+      dayGrid.querySelectorAll('.day-pill').forEach(function (btn) {
+        var d = parseInt(btn.dataset.day);
+        btn.classList.toggle('dimmed', d > maxDay);
+        btn.classList.toggle('today', month === todayMonth && d === todayDay);
+      });
     }
 
     /* ---- 高亮 ---- */
@@ -345,7 +339,7 @@
     }
 
     function syncDayHighlight(day) {
-      calGrid.querySelectorAll('.cal-day').forEach(function (c) {
+      dayGrid.querySelectorAll('.day-pill').forEach(function (c) {
         c.classList.remove('active', 'matched');
         if (parseInt(c.dataset.day) === day) {
           c.classList.add(orbitState.confirmed ? 'matched' : 'active');
@@ -355,7 +349,7 @@
 
     function clearAllHighlight() {
       monthsEl.querySelectorAll('.tarot-card').forEach(function (c) { c.classList.remove('active', 'matched'); });
-      calGrid.querySelectorAll('.cal-day').forEach(function (c) { c.classList.remove('active', 'matched'); });
+      dayGrid.querySelectorAll('.day-pill').forEach(function (c) { c.classList.remove('active', 'matched'); });
     }
 
     /* ---- 发光 + 提示 ---- */
@@ -384,7 +378,7 @@
         var idx = findConstellationIndex(names[0]);
         orbitState.activeSignIndex = idx;
         _updateGlow(idx, 1);
-        hintEl.textContent = orbitState.month + '月 · 在日历中选一个日期';
+        hintEl.textContent = orbitState.month + '月 · 选一个日期星丸';
         oracleEl.textContent = '';
         confirmBtn.style.display = 'none';
       } else if (hd) {
@@ -396,7 +390,7 @@
       } else {
         orbitState.activeSignIndex = -1;
         _updateGlow(-1, 0);
-        hintEl.textContent = '选择月份符卡，再在日历中选日期';
+        hintEl.textContent = '选月份符卡 · 再选日期星丸';
         oracleEl.textContent = '';
         confirmBtn.style.display = 'none';
       }
@@ -410,18 +404,21 @@
       clearAutoReset();
       var m = parseInt(card.dataset.month);
       orbitState.month = m;
-      renderCalendar(m);
-      if (orbitState.day > daysInMonth(m)) orbitState.day = 0;
+      orbitState.day = 0; // 切月份清空已选日期，重新选
+      syncDayDim(m);
       syncMonths(m);
-      if (orbitState.day > 0) syncDayHighlight(orbitState.day);
+      // 清除残留的日期高亮
+      dayGrid.querySelectorAll('.day-pill').forEach(function (btn) {
+        btn.classList.remove('active', 'matched');
+      });
       updateHint();
       scheduleAutoReset();
     });
 
-    /* ---- 日历日期点击 ---- */
-    calGrid.addEventListener('click', function (e) {
-      var btn = e.target.closest('.cal-day');
-      if (!btn || !btn.dataset.day || orbitState.confirmed || btn.classList.contains('placeholder')) return;
+    /* ---- 日期星丸点击 ---- */
+    dayGrid.addEventListener('click', function (e) {
+      var btn = e.target.closest('.day-pill');
+      if (!btn || !btn.dataset.day || orbitState.confirmed || btn.classList.contains('dimmed')) return;
       clearAutoReset();
       orbitState.day = parseInt(btn.dataset.day);
       syncDayHighlight(orbitState.day);
@@ -462,12 +459,12 @@
       orbitState.confirmed = false;
       _updateGlow(-1, 0);
       clearAllHighlight();
-      renderCalendar(1);
+      syncDayDim(0);
       confirmBtn.style.display = 'none';
       resultEl.style.display = 'none';
       resultEl.innerHTML = '';
       hintEl.style.opacity = '';
-      hintEl.textContent = '选择月份符卡，再在日历中选日期';
+      hintEl.textContent = '选月份符卡 · 再选日期星丸';
       oracleEl.textContent = '';
     }
 
@@ -485,7 +482,8 @@
     function scheduleAutoReset() { clearAutoReset(); _arTimer = setTimeout(resetState, 12000); }
 
     /* ---- 启动 ---- */
-    renderCalendar(1);
+    /* ---- 启动 ---- */
+    renderDayPills();
 
     setTimeout(function () {
       if (!orbitState.month && !orbitState.confirmed) hintEl.style.opacity = '0.3';
@@ -1022,13 +1020,18 @@
       lines: [[0,1,2,3,4,5,6,7,8,9,10,11,12],[0,13,1],[8,14,11]] }
   };
 
-  /** 12 星座锚点（块左上角，相对 section）：聚在星环左右两侧附近、纵向交错，块间允许相互交叠 */
-  var CONSTELLATION_ANCHORS = [
-    // 左侧（白羊→处女）
-    [0.03, 0.05], [0.17, 0.12], [0.05, 0.24], [0.18, 0.32], [0.04, 0.42], [0.16, 0.50],
-    // 右侧（天秤→双鱼）
-    [0.82, 0.05], [0.68, 0.12], [0.80, 0.24], [0.67, 0.32], [0.81, 0.42], [0.69, 0.50]
-  ];
+  /** 生成星座锚点 — 动态计算以支持 resize 时切换布局 */
+  function getAnchors() {
+    return window.innerWidth > 768
+      ? [
+          [0.02, 0.06], [0.14, 0.14], [0.02, 0.26], [0.14, 0.34], [0.02, 0.44], [0.14, 0.52],
+          [0.84, 0.06], [0.72, 0.14], [0.84, 0.26], [0.72, 0.34], [0.84, 0.44], [0.72, 0.52]
+        ]
+      : [
+          [0.5, 0.4], [0.5, 0.4], [0.5, 0.4], [0.5, 0.4], [0.5, 0.4], [0.5, 0.4],
+          [0.5, 0.4], [0.5, 0.4], [0.5, 0.4], [0.5, 0.4], [0.5, 0.4], [0.5, 0.4]
+        ];
+  }
 
   /** 由 CONSTELLATION_SHAPES 构建渲染数组：折线拆成点对边、预计算包围盒、分配锚点
    *  左侧 6（白羊→处女）、右侧 6（天秤→双鱼），与 ZODIAC 同序，环绕星环两侧 */
@@ -1052,7 +1055,7 @@
       }
       out.push({
         name: order[i], pts: shape.pts, edges: edges, bright: [],
-        anchor: CONSTELLATION_ANCHORS[i],
+        anchor: [0.5, 0.5], // 占位，generate() 时重新赋值
         minU: minU, minV: minV, fw: (maxU - minU) || 1, fh: (maxV - minV) || 1
       });
     }
@@ -1113,35 +1116,82 @@
     // 流星 — 偶发性划过，动态点缀
     var meteors = [];
 
-    // 庆祝粒子弧线 — 确认星座后爆发金色粒子
-    var celebrateParticles = []; // [{cx, cy, vx, vy, r, alpha, life, maxLife}]
+    // 庆祝粒子 — 确认星座后绚丽金色烟花
+    var celebrateParticles = []; // [{cx, cy, vx, vy, r, alpha, life, maxLife, color, trail, spin}]
 
-    /** 在指定星座节点位置生成庆祝粒子弧线 */
+    /** 金色调色板 — 暖金/亮金/暖白/橘红 多彩烟花感 */
+    var CELEBRATE_COLORS = [
+      '255, 215, 110',  // 亮金
+      '240, 192, 96',   // 暖金
+      '255, 240, 180',  // 暖白
+      '255, 170, 90',   // 橘金
+      '255, 250, 220'   // 米白
+    ];
+
+    /** 在指定星座节点位置生成绚丽庆祝粒子（手机端从确认按钮位置爆发） */
     function spawnCelebrate(constIndex) {
       if (constIndex < 0) return;
-      var nodes = [];
-      for (var i = 0; i < cNodes.length; i++) {
-        if (cNodes[i].constIndex === constIndex) nodes.push(cNodes[i]);
+      var srcX, srcY;
+
+      if (window.innerWidth <= 768) {
+        // 手机端：以"确认选择"按钮中心为爆发源
+        var btn = document.getElementById('tarot-confirm') || document.getElementById('orbit-confirm');
+        if (!btn) return;
+        var sRect = section.getBoundingClientRect();
+        var bRect = btn.getBoundingClientRect();
+        srcX = bRect.left + bRect.width / 2 - sRect.left;
+        srcY = bRect.top + bRect.height / 2 - sRect.top;
+      } else {
+        // 桌面端：以星座中心为爆发源
+        var nodes = [];
+        for (var i = 0; i < cNodes.length; i++) {
+          if (cNodes[i].constIndex === constIndex) nodes.push(cNodes[i]);
+        }
+        if (!nodes.length) return;
+        srcX = 0; srcY = 0;
+        for (var n = 0; n < nodes.length; n++) { srcX += nodes[n].cx; srcY += nodes[n].cy; }
+        srcX /= nodes.length; srcY /= nodes.length;
       }
-      if (!nodes.length) return;
-      // 以星座中心为爆发源
-      var srcX = 0, srcY = 0;
-      for (var n = 0; n < nodes.length; n++) { srcX += nodes[n].cx; srcY += nodes[n].cy; }
-      srcX /= nodes.length; srcY /= nodes.length;
-      // 喷射 25 个金色粒子
-      for (var p = 0; p < 25; p++) {
-        var angle = (p / 25) * Math.PI * 2 + Math.random() * 0.3;
-        var speed = 1.2 + Math.random() * 3.5;
-        var life = 1200 + Math.random() * 1800;
+
+      // 主爆发 — 60 个多彩粒子向四周喷射
+      for (var p = 0; p < 60; p++) {
+        var angle = (p / 60) * Math.PI * 2 + Math.random() * 0.25;
+        var speed = 1.5 + Math.random() * 4.5;
+        var life = 1400 + Math.random() * 2000;
         celebrateParticles.push({
           cx: srcX, cy: srcY,
           vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed - 0.8, // 微向上偏
-          r: 1.0 + Math.random() * 2.0,
+          vy: Math.sin(angle) * speed - 1.4, // 较强向上偏，烟花升腾感
+          r: 1.2 + Math.random() * 2.6,
           alpha: 0.85 + Math.random() * 0.15,
           life: life, maxLife: life,
+          color: CELEBRATE_COLORS[(Math.random() * CELEBRATE_COLORS.length) | 0],
+          trail: 0.25 + Math.random() * 0.35, // 拖尾长度系数
+          spin: Math.random() * Math.PI * 2, // 闪烁相位
+          twinkleSpeed: 0.008 + Math.random() * 0.02,
         });
       }
+
+      // 次级小爆发 — 延迟 350ms 在原位补一波细碎火星
+      setTimeout(function () {
+        for (var p2 = 0; p2 < 35; p2++) {
+          var a2 = Math.random() * Math.PI * 2;
+          var sp2 = 0.6 + Math.random() * 2.2;
+          var lf2 = 800 + Math.random() * 1200;
+          celebrateParticles.push({
+            cx: srcX, cy: srcY,
+            vx: Math.cos(a2) * sp2,
+            vy: Math.sin(a2) * sp2 - 0.6,
+            r: 0.8 + Math.random() * 1.6,
+            alpha: 0.7 + Math.random() * 0.3,
+            life: lf2, maxLife: lf2,
+            color: CELEBRATE_COLORS[(Math.random() * CELEBRATE_COLORS.length) | 0],
+            trail: 0.15 + Math.random() * 0.25,
+            spin: Math.random() * Math.PI * 2,
+            twinkleSpeed: 0.012 + Math.random() * 0.02,
+          });
+        }
+      }, 350);
     }
     // 暴露给 initOrbit 调用
     window._spawnCelebrate = spawnCelebrate;
@@ -1149,8 +1199,9 @@
     // 星环 → 星座 引导光束（月日选齐/确认时闪现一次后消散）
     var starBeams = []; // [{x1,y1,x2,y2, life, maxLife, gold}]
 
-    /** 从星环双星对齐位（6 点方向）射向对应星座中心的光束 */
+    /** 从星环双星对齐位（6 点方向）射向对应星座中心的光束（手机端不生成） */
     function spawnStarBeam(constIndex, gold) {
+      if (window.innerWidth <= 768) return; // 手机端无引导光束
       if (constIndex < 0 || constIndex >= CONSTELLATIONS.length) return;
       var nodes = [];
       for (var i = 0; i < cNodes.length; i++) {
@@ -1199,10 +1250,11 @@
         });
       }
 
-      // 星座节点 — 形状按真实像素等比缩放居中到各自锚点块内（任何屏幕不变形）
-      // 大小/亮度/闪烁与自由粒子同分布，平时完全融入星空不可辨
+      // 星座节点 — 重新计算锚点以支持 resize，等比缩放居中到锚点块
+      var anchors = getAnchors();
       for (var c = 0; c < CONSTELLATIONS.length; c++) {
         var co = CONSTELLATIONS[c];
+        co.anchor = anchors[c];
         var pts = co.pts;
         var brightSet = co.bright || [];
         // 锚点块（像素）：聚在星环左右两侧附近，块间允许交叠
@@ -1334,13 +1386,16 @@
         }
       }
 
-      // 庆祝粒子衰减
+      // 庆祝粒子衰减 — 位移 + 重力 + 空气阻力 + 闪烁相位
       for (var cp = celebrateParticles.length - 1; cp >= 0; cp--) {
         var cpItem = celebrateParticles[cp];
         cpItem.cx += cpItem.vx;
         cpItem.cy += cpItem.vy;
-        cpItem.vy += 0.015; // 微重力
-        cpItem.life -= 16; // 每帧 ~16ms
+        cpItem.vy += 0.018; // 重力
+        cpItem.vx *= 0.985; // 空气阻力 → 末段渐缓飘落
+        cpItem.vy *= 0.985;
+        cpItem.spin += cpItem.twinkleSpeed; // 闪烁相位推进
+        cpItem.life -= 16;
         if (cpItem.life <= 0) celebrateParticles.splice(cp, 1);
       }
 
@@ -1365,12 +1420,15 @@
       // 0. 透明清屏 — 透出全站纯色背景（白天浅蓝 / 夜间深蓝），星座区与页面同色
       ctx.clearRect(0, 0, W, H);
 
-      // 星座连线 — 平时完全隐藏（星座融于星空）；确认后金色逐笔描画浮现
-      ctx.lineWidth = 1;
-      ctx.lineCap = 'round';
-      for (var li = 0; li < constellationLines.length; li++) {
-        var line = constellationLines[li];
-        if (line.reveal <= 0) continue;
+      // 星座连线 — 未激活星座隐藏；手机端完全不画连线
+      if (window.innerWidth > 768) {
+        ctx.lineWidth = 1;
+        ctx.lineCap = 'round';
+        for (var li = 0; li < constellationLines.length; li++) {
+          var line = constellationLines[li];
+          if (line.reveal <= 0) continue;
+          // 未激活星座的连线跳过
+          if (!CONSTELLATIONS[line.constIndex] || (CONSTELLATIONS[line.constIndex].glowLevel || 0) === 0) continue;
         var na = cNodes[line.a];
         var nb = cNodes[line.b];
         if (!na || !nb) continue;
@@ -1390,8 +1448,10 @@
           ctx.fill();
         }
       }
+      } // end if 桌面端画连线
 
-      // 星环 → 星座 引导光束：延伸（前 28%）→ 闪烁 ~2.5 次 → 淡出
+      // 星环 → 星座 引导光束：延伸（前 28%）→ 闪烁 ~2.5 次 → 淡出（手机端不画）
+      if (window.innerWidth > 768) {
       for (var sbd = 0; sbd < starBeams.length; sbd++) {
         var bm = starBeams[sbd];
         var bt = 1 - bm.life / bm.maxLife;
@@ -1425,6 +1485,7 @@
         ctx.fillStyle = 'rgba(' + bCol + ',' + bAlpha + ')';
         ctx.fill();
       }
+      } // end if 桌面端画光束
 
       // 流星
       for (var mi = meteors.length - 1; mi >= 0; mi--) {
@@ -1444,18 +1505,47 @@
         ctx.stroke();
       }
 
-      // 1. 庆祝粒子弧线 — 确认星座后金色粒子爆发
+      // 1. 庆祝粒子 — 绚丽金色烟花：光晕 + 流线拖尾 + 闪烁
       for (var cpi = 0; cpi < celebrateParticles.length; cpi++) {
         var cp = celebrateParticles[cpi];
-        var cpAlpha = cp.alpha * (cp.life / cp.maxLife);
+        var cpRatio = cp.life / cp.maxLife;
+        var cpAlpha = cp.alpha * cpRatio;
+        // 闪烁 — 末段加剧忽明忽暗
+        var twinkle = 0.7 + 0.3 * Math.abs(Math.sin(cp.spin));
+        var drawA = cpAlpha * twinkle;
+        var col = cp.color || '240, 192, 96';
+        var curR = cp.r * (0.4 + 0.6 * cpRatio);
+
+        // 外层柔光晕 — 大范围径向辉光
+        var glowR = curR * 4.5;
+        var glow = ctx.createRadialGradient(cp.cx, cp.cy, 0, cp.cx, cp.cy, glowR);
+        glow.addColorStop(0, 'rgba(' + col + ',' + (drawA * 0.55) + ')');
+        glow.addColorStop(0.4, 'rgba(' + col + ',' + (drawA * 0.18) + ')');
+        glow.addColorStop(1, 'rgba(' + col + ',0)');
         ctx.beginPath();
-        ctx.arc(cp.cx, cp.cy, cp.r * (0.5 + 0.5 * (cp.life / cp.maxLife)), 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(240, 192, 96, ' + cpAlpha + ')';
+        ctx.arc(cp.cx, cp.cy, glowR, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
         ctx.fill();
-        // 拖尾 — 小模糊光晕
+
+        // 流线拖尾 — 沿速度方向拉出渐变尾巴
+        var tl = cp.trail * 14;
+        var tx = cp.cx - cp.vx * tl;
+        var ty = cp.cy - cp.vy * tl;
+        var tGrad = ctx.createLinearGradient(cp.cx, cp.cy, tx, ty);
+        tGrad.addColorStop(0, 'rgba(' + col + ',' + (drawA * 0.7) + ')');
+        tGrad.addColorStop(1, 'rgba(' + col + ',0)');
         ctx.beginPath();
-        ctx.arc(cp.cx - cp.vx * 0.8, cp.cy - cp.vy * 0.8, cp.r * 1.8 * (cp.life / cp.maxLife), 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(240, 210, 140, ' + (cpAlpha * 0.3) + ')';
+        ctx.moveTo(cp.cx, cp.cy);
+        ctx.lineTo(tx, ty);
+        ctx.strokeStyle = tGrad;
+        ctx.lineWidth = curR * 1.4;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // 核心亮点 — 高饱和白金色
+        ctx.beginPath();
+        ctx.arc(cp.cx, cp.cy, curR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 250, 230, ' + Math.min(1, drawA * 1.2) + ')';
         ctx.fill();
       }
 
@@ -1471,9 +1561,14 @@
         ctx.fill();
       }
 
-      // 3. 星座节点 — 平时与自由粒子画法完全一致（融合隐藏）；激活后光晕平滑浮现，确认转金
+      // 3. 星座节点 — 仅显示 glowLevel > 0 的激活星座；手机端完全不画星座
       for (var m = 0; m < cNodes.length; m++) {
         var nd = cNodes[m];
+        // 手机端：跳过星座节点绘制（坐标仍保留供庆祝粒子/光束使用）
+        if (window.innerWidth <= 768) continue;
+        // glowLevel === 0 → 完全跳过，不留痕迹
+        var constGlow = CONSTELLATIONS[nd.constIndex] ? (CONSTELLATIONS[nd.constIndex].glowLevel || 0) : 0;
+        if (constGlow === 0) continue;
         var g = nd.glowSmooth; // 0~3 连续插值
         var ntw = 1 + Math.sin(timestamp * nd.twinkleSpeed + nd.twinkleOffset) * 0.2;
         var nAlpha = Math.max(0.05, Math.min(0.85, nd.baseAlpha * ntw));
@@ -1514,8 +1609,7 @@
     // ---- 主循环（注册到全局 rAF 调度） ----
 
     function tick(ts) {
-      if (W <= 0 || H <= 0) return;
-      if (getComputedStyle(canvas).display === 'none') return;
+      if (!_canvasVisible || W <= 0 || H <= 0) return;
       lerpTheme();
       update(ts);
       draw(ts);
@@ -1537,6 +1631,7 @@
     }
 
     resize();
+    _canvasVisible = document.documentElement.classList.contains('night-mode');
     readTheme(true); // 载入时立即对齐当前模式，不渐变
     // 日夜切换时刷新调色目标（监听 <html> 的 night-mode class 切换），星点随插值渐变
     if (typeof MutationObserver !== 'undefined') {
@@ -1626,6 +1721,7 @@
       orbitState.activeSignIndex = -1;
       orbitState.confirmed = false;
       _updateGlow(-1, 0);
+      _canvasVisible = toNight;
       var deck = document.getElementById('tarot-deck');
       var orbitRing = document.getElementById('orbit-ring');
       if (toNight) {

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>孤鱼GY · 天空之隙</title>
   <meta name="description" content="孤鱼GY的个人主页 — 一条在天空之隙中游弋的飞鱼。探索星座运势、聆听音乐、与看板娘互动。">
   <meta name="keywords" content="孤鱼GY,个人主页,天空之隙,星座,运势,飞鱼,个人网站">
@@ -268,19 +268,16 @@
           <button class="tarot-card" data-month="11"><span class="tarot-glyph">♏</span><span class="tarot-label">11月</span></button>
           <button class="tarot-card" data-month="12"><span class="tarot-glyph">♐</span><span class="tarot-label">12月</span></button>
         </div>
-        <!-- 日历区：统一 grid-cols-7 包裹星期和日期（相同列宽保证完美对齐） -->
-        <div class="tarot-calendar" id="tarot-calendar">
-          <div class="cal-weekdays">
-            <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
-          </div>
-          <div class="cal-grid" id="cal-grid">
-            <!-- JS 根据选中月份动态生成日期卡片 -->
+        <!-- 日期选择：漂浮星丸网格（非日历式布局） -->
+        <div class="day-picker" id="day-picker">
+          <div class="day-grid" id="day-grid">
+            <!-- JS 根据选中月份动态生成日期星丸 -->
           </div>
         </div>
         <!-- 中心确认区域 -->
         <div class="tarot-center" id="tarot-center">
           <span class="tarot-oracle" id="tarot-oracle"></span>
-          <span class="tarot-hint" id="tarot-hint">选择一张月份符卡，再选一个日期</span>
+          <span class="tarot-hint" id="tarot-hint">选月份符卡 · 再选日期星丸</span>
         </div>
         <button class="tarot-confirm" id="tarot-confirm" style="display:none;">确认选择</button>
         <div class="orbit-result" id="orbit-result" style="display:none;"></div>
