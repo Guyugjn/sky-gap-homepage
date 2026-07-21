@@ -178,7 +178,10 @@
     }
 
     function onMove(e) {
-      if (dragging) onChange(getPct(e));
+      if (dragging) {
+        e.preventDefault();
+        onChange(getPct(e));
+      }
     }
 
     function onUp() {
@@ -527,7 +530,9 @@
     var playlist = window.__PLAYLIST__ || [];
     var totalTracks = playlist.length;
 
-    var volume = CONFIG.music.startVolume;
+    // 读取上次保存的音量（localStorage），若无则用默认值
+    var savedVol = parseFloat(localStorage.getItem('gy_volume'));
+    var volume = (savedVol >= 0 && savedVol <= 1) ? savedVol : CONFIG.music.startVolume;
     var started = false; // 是否已完成首次加载
 
     // === 创建 audio ===
@@ -736,6 +741,19 @@
     // === 播放结束 ===
     audio.addEventListener('ended', playNext);
 
+    // === 播放错误 → 自动跳过 ===
+    audio.addEventListener('error', function () {
+      console.warn('音频加载错误：', audio.error ? audio.error.message : '未知错误');
+      if (!started) { updateLabel(currentIndex); return; }
+      // 已开始播放的曲目出错 → 自动切到下一首
+      updateLabel(currentIndex);
+      showToast('⏭ 已跳过 · 下一首', 2000);
+      // 等 toast 显示一会儿再切，避免连续快速切换
+      setTimeout(function () {
+        if (isPlaying) playNext();
+      }, 300);
+    }, { once: false });
+
     // === 时间格式化 ===
     function formatTime(sec) {
       if (!isFinite(sec) || sec < 0) return '0:00';
@@ -866,7 +884,12 @@
     var FRICTION = 0.92;      // 摩擦系数（每帧衰减）
     var WHEEL_GAIN = 0.18;    // 滚轮 delta → 速度转换系数
     var MAX_SPEED = 10;       // 单帧最大位移 (px)
+    var MAX_SPEED_CHANGE = 1.8; // 单次滚轮事件速度增量上限，防止快速滚动跳跃感
     var SPRING_TENSION = 0.20;// 弹性定位劲度
+
+    // 滚轮平滑滤波 — 用 EWMA 抑制尖峰 delta（如触控板惯性阶段的偶发大值）
+    var _wheelSmooth = 0;
+    var WHEEL_SMOOTH_ALPHA = 0.55; // 平滑系数（越小越滞重）
 
     function startScrollRaf() {
       if (scrollRaf) return;
@@ -928,13 +951,19 @@
       startScrollRaf();
     }
 
-    // 鼠标滚轮接管 — 实时累加速度
+    // 鼠标滚轮接管 — 实时累加速度（带平滑滤波 + 增量限制）
     function onPlaylistWheel(e) {
       if (!listInner) return;
       e.preventDefault();
       var delta = e.deltaY;
       if (e.deltaMode === 1) delta *= 18;
-      scrollVel += delta * WHEEL_GAIN;
+      // EWMA 平滑：新值 = α·当前 + (1-α)·历史，抑制触控板惯性阶段的尖峰
+      _wheelSmooth = WHEEL_SMOOTH_ALPHA * delta + (1 - WHEEL_SMOOTH_ALPHA) * _wheelSmooth;
+      var gain = _wheelSmooth * WHEEL_GAIN;
+      // 限制单次滚轮事件的速度增量，避免快速滚动跳跃感
+      if (gain > MAX_SPEED_CHANGE) gain = MAX_SPEED_CHANGE;
+      if (gain < -MAX_SPEED_CHANGE) gain = -MAX_SPEED_CHANGE;
+      scrollVel += gain;
       if (scrollVel > MAX_SPEED) scrollVel = MAX_SPEED;
       if (scrollVel < -MAX_SPEED) scrollVel = -MAX_SPEED;
       scrollSpring = false;
@@ -959,6 +988,7 @@
       cancelAnimationFrame(scrollRaf);
       scrollRaf = 0;
       scrollVel = 0;
+      _wheelSmooth = 0;
       scrollSpring = false;
       document.removeEventListener('wheel', onPlaylistWheel);
     }
@@ -995,6 +1025,8 @@
         volumeFill.style.width = (pct * 100) + '%';
         if (volumePct) volumePct.textContent = Math.round(pct * 100) + '%';
         updateVolumeIcon(volume);
+        // 持久化音量
+        try { localStorage.setItem('gy_volume', pct.toFixed(3)); } catch (e) {}
       });
     }
 
@@ -1019,10 +1051,12 @@
         volume = 0;
         audio.volume = 0;
         updateVolumeUI(0);
+        try { localStorage.setItem('gy_volume', '0'); } catch (e) {}
       } else {
         volume = volumePrev || CONFIG.music.startVolume;
         audio.volume = volume;
         updateVolumeUI(volume);
+        try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
       }
     });
 
@@ -1094,19 +1128,11 @@
 
   // ==================== 5. 深夜模式切换（自动 + 手动） ====================
 
-  var _nightManual = false; // 用户手动切换后覆盖自动检测，刷新页面恢复
-  var _themeFadeTimer = null;
+  var _nightManual = false;
 
-  /** 应用夜间模式；animate=true 时挂载 theme-fade 使全页颜色 2s 渐变（载入初始设置直接到位） */
-  function applyNight(isNight, animate) {
+  /** 应用夜间模式 */
+  function applyNight(isNight) {
     var root = document.documentElement;
-    if (animate && root.classList.contains('night-mode') !== isNight) {
-      root.classList.add('theme-fade');
-      clearTimeout(_themeFadeTimer);
-      _themeFadeTimer = setTimeout(function () {
-        root.classList.remove('theme-fade');
-      }, 2200);
-    }
     root.classList.toggle('night-mode', isNight);
     if (typeof window._onThemeSwitch === 'function') {
       window._onThemeSwitch(isNight);
@@ -1133,7 +1159,7 @@
       var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       var hour = new Date().getHours();
       var isNight = prefersDark || hour >= 19 || hour < 6;
-      applyNight(isNight, !firstRun);
+      applyNight(isNight);
       firstRun = false;
       updateIcon();
     }
@@ -1141,7 +1167,7 @@
     if (btn) {
       btn.addEventListener('click', function () {
         _nightManual = true;
-        applyNight(!document.documentElement.classList.contains('night-mode'), true);
+        applyNight(!document.documentElement.classList.contains('night-mode'));
         updateIcon();
       });
     }

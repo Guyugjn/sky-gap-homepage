@@ -1134,13 +1134,20 @@
       var srcX, srcY;
 
       if (window.innerWidth <= 768) {
-        // 手机端：以"确认选择"按钮中心为爆发源
-        var btn = document.getElementById('tarot-confirm') || document.getElementById('orbit-confirm');
-        if (!btn) return;
+        // 手机端：优先以星环中心为爆发源，星环隐藏时回退到确认按钮
+        var ring = document.getElementById('orbit-ring');
         var sRect = section.getBoundingClientRect();
-        var bRect = btn.getBoundingClientRect();
-        srcX = bRect.left + bRect.width / 2 - sRect.left;
-        srcY = bRect.top + bRect.height / 2 - sRect.top;
+        if (ring && ring.style.display !== 'none') {
+          var rRect = ring.getBoundingClientRect();
+          srcX = rRect.left + rRect.width / 2 - sRect.left;
+          srcY = rRect.top + rRect.height / 2 - sRect.top;
+        } else {
+          var btn = document.getElementById('tarot-confirm') || document.getElementById('orbit-confirm');
+          if (!btn) return;
+          var bRect = btn.getBoundingClientRect();
+          srcX = bRect.left + bRect.width / 2 - sRect.left;
+          srcY = bRect.top + bRect.height / 2 - sRect.top;
+        }
       } else {
         // 桌面端：以星座中心为爆发源
         var nodes = [];
@@ -1344,45 +1351,51 @@
       }
 
       // 星座节点：弹簧回归（无自主晃动，保持形状）+ 发光平滑插值
-      for (var j = 0; j < cNodes.length; j++) {
-        var n = cNodes[j];
-        if (n.cx === 0 && n.cy === 0) { n.cx = n.rx * W; n.cy = n.ry * H; }
+      // 手机端跳过星座节点更新（连线/光束/节点均不绘制，仅保留庆祝粒子和流星）
+      if (window.innerWidth > 768) {
+        for (var j = 0; j < cNodes.length; j++) {
+          var n = cNodes[j];
+          if (n.cx === 0 && n.cy === 0) { n.cx = n.rx * W; n.cy = n.ry * H; }
 
-        var nrx = n.rx * W, nry = n.ry * H;
-        var nfx = (nrx - n.cx) * 0.0025;
-        var nfy = (nry - n.cy) * 0.0025;
+          var nrx = n.rx * W, nry = n.ry * H;
+          var nfx = (nrx - n.cx) * 0.0025;
+          var nfy = (nry - n.cy) * 0.0025;
 
-        n.vx += nfx; n.vy += nfy;
-        n.vx *= 0.90; n.vy *= 0.90;
-        n.cx += n.vx; n.cy += n.vy;
+          n.vx += nfx; n.vy += nfy;
+          n.vx *= 0.90; n.vy *= 0.90;
+          n.cx += n.vx; n.cy += n.vy;
 
-        // 发光等级平滑趋近 — 激活时星点从星空中缓缓浮现，取消时缓缓隐没
-        var tg = CONSTELLATIONS[n.constIndex].glowLevel || 0;
-        n.glowSmooth += (tg - n.glowSmooth) * 0.06;
+          // 发光等级平滑趋近 — 激活时星点从星空中缓缓浮现，取消时缓缓隐没
+          var tg = CONSTELLATIONS[n.constIndex].glowLevel || 0;
+          n.glowSmooth += (tg - n.glowSmooth) * 0.06;
+        }
       }
 
       // 星座连线描画：确认后延迟片刻（等引导光束到达）开始逐笔勾勒；取消后渐隐
-      for (var ch = 0; ch < CONSTELLATIONS.length; ch++) {
-        var co = CONSTELLATIONS[ch];
-        if ((co.glowLevel || 0) >= 3) {
-          if (co._revealHold == null) co._revealHold = 26; // ~430ms
-          else if (co._revealHold > 0) co._revealHold--;
-        } else {
-          co._revealHold = null;
-        }
-      }
-      for (var lr = 0; lr < constellationLines.length; lr++) {
-        var ln = constellationLines[lr];
-        var lco = CONSTELLATIONS[ln.constIndex];
-        if ((lco.glowLevel || 0) >= 3 && lco._revealHold === 0) {
-          // 链式描画：同星座内前一条线画过 65% 后，本条才动笔
-          var prevLn = lr > 0 && constellationLines[lr - 1].constIndex === ln.constIndex
-            ? constellationLines[lr - 1] : null;
-          if (!prevLn || prevLn.reveal > 0.65) {
-            ln.reveal = Math.min(1, ln.reveal + 0.055);
+      // 手机端跳过连线描画状态更新（连线/光束/节点均不绘制）
+      if (window.innerWidth > 768) {
+        for (var ch = 0; ch < CONSTELLATIONS.length; ch++) {
+          var co = CONSTELLATIONS[ch];
+          if ((co.glowLevel || 0) >= 3) {
+            if (co._revealHold == null) co._revealHold = 26; // ~430ms
+            else if (co._revealHold > 0) co._revealHold--;
+          } else {
+            co._revealHold = null;
           }
-        } else {
-          ln.reveal = Math.max(0, ln.reveal - 0.08);
+        }
+        for (var lr = 0; lr < constellationLines.length; lr++) {
+          var ln = constellationLines[lr];
+          var lco = CONSTELLATIONS[ln.constIndex];
+          if ((lco.glowLevel || 0) >= 3 && lco._revealHold === 0) {
+            // 链式描画：同星座内前一条线画过 65% 后，本条才动笔
+            var prevLn = lr > 0 && constellationLines[lr - 1].constIndex === ln.constIndex
+              ? constellationLines[lr - 1] : null;
+            if (!prevLn || prevLn.reveal > 0.65) {
+              ln.reveal = Math.min(1, ln.reveal + 0.055);
+            }
+          } else {
+            ln.reveal = Math.max(0, ln.reveal - 0.08);
+          }
         }
       }
 
