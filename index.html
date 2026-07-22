@@ -20,6 +20,7 @@
   <meta name="twitter:title" content="孤鱼GY · 天空之隙">
   <meta name="twitter:description" content="一条在天空之隙中游弋的飞鱼。">
   <meta name="twitter:image" content="http://150.138.73.135:10256/assets/avatar.jpg">
+  <meta name="theme-color" content="#B0D2E7" id="theme-color-meta">
   <link rel="icon" href="assets/favicon.svg">
   <!-- Ma Shan Zheng 马山正体 — 本地托管，不依赖 Google Fonts -->
   <link rel="stylesheet" href="assets/fonts/ma-shan-zheng.css">
@@ -27,10 +28,10 @@
   <link rel="stylesheet" href="css/style.css">
   <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
   <script defer src="assets/music/playlist.js"></script>
+  <script defer src="assets/twemoji.min.js"></script>
   <script defer src="js/main.js"></script>
   <script defer src="js/zodiac.js"></script>
   <script defer src="live2d/autoload.js"></script>
-  <script defer src="assets/twemoji.min.js"></script>
 </head>
 <body>
   <!-- 页面加载进度条 -->
@@ -313,7 +314,7 @@
             <g class="orbit-outer-nodes" id="orbit-outer-nodes"></g>
             <!-- 选中月星的四芒星光（JS 定位到选中星，随外圈同转） -->
             <g class="orbit-spark-pos" id="orbit-spark-outer">
-              <g class="orbit-spark orbit-spark--lg">
+              <g class="orbit-spark">
                 <line x1="-14" y1="0" x2="14" y2="0"/>
                 <line x1="0" y1="-14" x2="0" y2="14"/>
               </g>
@@ -344,7 +345,7 @@
 
       <div class="zodiac-grid">
         <!-- ===== 运势面板 ===== -->
-        <div class="zodiac-card fortune-card fortune-card--full" id="fortune-card">
+        <div class="zodiac-card fortune-card" id="fortune-card">
           <div class="fortune-header">
             <div class="fortune-header-left">
               <div class="card-icon">🔮</div>

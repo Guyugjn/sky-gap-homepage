@@ -167,6 +167,7 @@ body {
   animation: cloud-drift linear infinite;
   animation-duration: var(--drift-dur, 45s);
   animation-delay: var(--drift-delay, 0s);
+  will-change: transform;
 }
 
 .cloud-drift--far  { --drift-dur: 58s; top: 10%; }
@@ -276,7 +277,7 @@ body {
   filter:
     drop-shadow(0 0 10px rgba(137, 196, 225, 0.45))
     drop-shadow(0 0 3px  rgba(232, 244, 253, 0.5));
-  will-change: transform, left, top;
+  will-change: transform;
 }
 
 .cursor-fish.visible {
@@ -631,8 +632,7 @@ body {
   padding: 0.65rem 0.8rem 0.6rem;
   box-shadow: 0 4px 24px rgba(30, 59, 77, 0.08);
   margin-top: 0.8rem;
-  margin-bottom: 0.5rem;
-  margin-bottom: env(safe-area-inset-bottom, 0px);
+  margin-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
   width: min(300px, 92vw);
   transition:
     opacity 0.35s var(--ease-premium),
@@ -1044,7 +1044,6 @@ body {
 /* 音量范围条 — 和进度条同样的自定义 div 系统 */
 .volume-bar-wrap {
   flex: 1;
-  min-width: 60px;
   height: 14px;              /* 热区 14px */
   cursor: pointer;
   position: relative;
@@ -1828,8 +1827,10 @@ html.night-mode .tarot-deck {
   width: 100%;
   height: 100%;
   filter: drop-shadow(0 0 10px rgba(137, 196, 225, 0.25));
-  /* 整体静止 — 内外圈各自独立旋转（JS setAttribute 驱动 + rAF 缓动） */
+  /* 整体静止 — 内外圈各自独立旋转（CSS 变量驱动，JS 只更新 --outer-rot / --inner-rot） */
 }
+.orbit-outer-group { transform: rotate(var(--outer-rot, 0deg)); transform-origin: 300px 300px; }
+.orbit-inner-group { transform: rotate(var(--inner-rot, 0deg)); transform-origin: 300px 300px; }
 
 /* 轨道环 */
 .orbit-track {
@@ -2139,25 +2140,12 @@ html.night-mode .tarot-deck {
   60%  { opacity: 1; transform: translateY(-2px) scale(1.02); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
-/* 清理白天结果面板的重复声明 */
 
 /* 夜间保持原有动画 */
 @keyframes orbit-result-in {
   0%   { opacity: 0; transform: translateX(-50%) translateY(14px) scale(0.9); }
   60%  { opacity: 1; transform: translateX(-50%) translateY(-3px) scale(1.03); }
   100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-}
-
-/* 结果面板中的星座符号 — 独立弹跳入场（稍晚于面板，层次感） */
-.orbit-result-emoji {
-  display: inline-block;
-  animation: result-emoji-pop 0.5s 0.12s var(--ease-playful) both;
-}
-
-@keyframes result-emoji-pop {
-  from { transform: scale(0); }
-  60%  { transform: scale(1.25); }
-  to   { transform: scale(1); }
 }
 
 /* 运势面板 — 浮动在星环下方（白天间距 2rem，夜间 6.5rem 容纳 hint/按钮） */
@@ -2538,10 +2526,6 @@ html.night-mode .zodiac-grid {
     user-select: auto;
     width: 100%;
   }
-  .fortune-header-left::after {
-    content: '' !important;
-    display: none !important;
-  }
   .fortune-card {
     display: flex;
     flex-direction: column;
@@ -2558,6 +2542,26 @@ html.night-mode .zodiac-grid {
   .footer-brand {
     font-size: 1.2rem;
   }
+}
+
+/* ============================================
+   移动端 hover 清理 — 触屏设备不需要 hover 假态
+   ============================================ */
+@media (hover: none) {
+  .tarot-card:hover { transform: none !important; box-shadow: none !important; }
+  .day-pill:hover { transform: none !important; box-shadow: none !important; }
+  .social-link:hover { transform: none !important; box-shadow: none !important; background: rgba(255, 255, 255, 0.45) !important; color: var(--text-primary) !important; }
+  .music-btn:hover { transform: none !important; box-shadow: none !important; }
+  .music-btn--sm:hover { transform: none !important; background: transparent !important; color: var(--text-secondary) !important; }
+  .zodiac-card:hover { transform: none !important; box-shadow: 0 2px 20px rgba(137, 196, 225, 0.15) !important; }
+  .fortune-tab:hover { transform: none !important; }
+  .orbit-redo:hover { transform: none !important; box-shadow: none !important; background: rgba(255, 255, 255, 0.65) !important; color: var(--text-primary) !important; border-color: var(--card-border) !important; }
+  .orbit-confirm:hover { transform: translateX(-50%) !important; box-shadow: none !important; }
+  html.night-mode .social-link:hover { background: rgba(30, 50, 75, 0.55) !important; color: var(--text-primary) !important; }
+  html.night-mode .music-btn--sm:hover { background: transparent !important; color: var(--text-secondary) !important; }
+  html.night-mode .fortune-tab:hover { background: rgba(30, 50, 75, 0.55) !important; color: rgba(180, 208, 228, 0.6) !important; }
+  html.night-mode .orbit-redo:hover { background: rgba(25, 45, 70, 0.75) !important; color: var(--text-primary) !important; }
+  html.night-mode .music-btn:hover { background: rgba(30, 50, 75, 0.55) !important; box-shadow: none !important; }
 }
 
 /* ============================================

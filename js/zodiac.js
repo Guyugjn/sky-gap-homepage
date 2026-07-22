@@ -188,14 +188,34 @@
     document.getElementById('fortune-error').style.display = 'block';
   }
 
-  /** 加载运势 */
+  /** 加载运势（含竞态保护 + 缓存，保存 1 天） */
+  var _lastFortuneController = null;
+  var _fortuneCache = {};
+
   function loadFortune() {
     showFortuneLoading();
+
+    // 取消上一个未完成的请求
+    if (_lastFortuneController) {
+      _lastFortuneController.abort();
+    }
+
+    // 缓存键：星座名 + 时间维度
+    var cacheKey = currentFortuneSign.name + '_' + currentFortuneTime;
+    var cached = _fortuneCache[cacheKey];
+    if (cached && Date.now() - cached.ts < 86400000) {
+      document.getElementById('fortune-loading').style.display = 'none';
+      renderFortune(cached.data);
+      return;
+    }
+
+    var controller = new AbortController();
+    _lastFortuneController = controller;
 
     var url = FORTUNE_API + '?type=' + encodeURIComponent(currentFortuneSign.name)
       + '&time=' + encodeURIComponent(currentFortuneTime);
 
-    fetch(url)
+    fetch(url, { signal: controller.signal })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -203,6 +223,7 @@
       .then(function (json) {
         document.getElementById('fortune-loading').style.display = 'none';
         if (json.code === 200 && json.data) {
+          _fortuneCache[cacheKey] = { data: json.data, ts: Date.now() };
           renderFortune(json.data);
         } else {
           showFortuneError();
@@ -222,11 +243,6 @@
     tabs.forEach(function (t) { t.classList.remove('active'); });
     var todayTab = document.querySelector('.fortune-tab[data-time="today"]');
     if (todayTab) todayTab.classList.add('active');
-    // 移动端自动展开运势抽屉
-    var fortuneCard = document.getElementById('fortune-card');
-    if (fortuneCard && window.innerWidth <= 768) {
-      fortuneCard.classList.add('fortune-card--open');
-    }
     loadFortune();
   }
 
@@ -245,15 +261,6 @@
       });
     });
 
-    // 移动端运势抽屉折叠/展开
-    var fortuneCard = document.getElementById('fortune-card');
-    var headerLeft = fortuneCard.querySelector('.fortune-header-left');
-    if (headerLeft && window.innerWidth <= 768) {
-      headerLeft.addEventListener('click', function () {
-        fortuneCard.classList.toggle('fortune-card--open');
-      });
-    }
-
     // 首次加载
     loadFortune();
   }
@@ -262,16 +269,6 @@
 
   /** 塔罗牌卡日历复用 orbitState、_updateGlow() 等共享全局状态。
    *  上排12张月份符卡 → 下排日历网格选日期 → 月日选齐显示"揭晓"按钮。 */
-
-  /** 辅助：更新 Canvas 发光状态（白天模式独立副本，不依赖 initOrbit 作用域） */
-  function _updateGlow(signIndex, level) {
-    for (var i = 0; i < CONSTELLATIONS.length; i++) {
-      CONSTELLATIONS[i].glowLevel = 0;
-    }
-    if (signIndex >= 0 && signIndex < CONSTELLATIONS.length && level > 0) {
-      CONSTELLATIONS[signIndex].glowLevel = level;
-    }
-  }
 
   function initTarot() {
     if (_tarotInited) return;
@@ -482,7 +479,6 @@
     function scheduleAutoReset() { clearAutoReset(); _arTimer = setTimeout(resetState, 12000); }
 
     /* ---- 启动 ---- */
-    /* ---- 启动 ---- */
     renderDayPills();
 
     setTimeout(function () {
@@ -549,6 +545,7 @@
 
     if (!orbitRing || !outerNodes || !innerNodes || !outerGroup || !innerGroup) return;
 
+    var orbitSvg = orbitRing.querySelector('.orbit-svg');
     var svgR = 300; // viewBox 半径
     var outerR = 240;
     var innerR = 140;
@@ -558,8 +555,8 @@
     var innerRot = 0;
 
     function applyRot() {
-      outerGroup.setAttribute('transform', 'rotate(' + outerRot + ' 300 300)');
-      innerGroup.setAttribute('transform', 'rotate(' + innerRot + ' 300 300)');
+      orbitSvg.style.setProperty('--outer-rot', outerRot + 'deg');
+      orbitSvg.style.setProperty('--inner-rot', innerRot + 'deg');
     }
 
     // 星环自转 — 外圈顺时针、内圈逆时针，选星/确认均不打断，永不停歇
@@ -600,7 +597,6 @@
     outerNodes.appendChild(outerFrag);
 
     // ---- 轨道碎屑粒子（漂浮光点，沿轨道流动） ----
-    var orbitSvg = orbitRing.querySelector('.orbit-svg');
     var debrisG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     debrisG.setAttribute('class', 'orbit-debris');
     // 在外圈和内圈轨道上各散布若干碎屑光点
@@ -746,16 +742,7 @@
       innerNodes.querySelectorAll('.orbit-node').forEach(function (n) { n.classList.remove('active', 'matched'); });
     }
 
-    // 更新 Canvas 发光状态
-    function updateGlow(signIndex, level) {
-      // level: 0=无, 1=月份范围(+40%), 2=精确匹配(+100%)
-      for (var i = 0; i < CONSTELLATIONS.length; i++) {
-        CONSTELLATIONS[i].glowLevel = 0;
-      }
-      if (signIndex >= 0 && signIndex < CONSTELLATIONS.length && level > 0) {
-        CONSTELLATIONS[signIndex].glowLevel = level;
-      }
-    }
+    // 更新 Canvas 发光状态（调用共享函数 _updateGlow）
 
     /** 中心数字标注 — 无参时显示已选月/日；传 previewText 时临时预览（hover 星点） */
     function syncCenterLabel(previewText) {
@@ -781,7 +768,7 @@
         var exactSign = getZodiacSign(orbitState.month, orbitState.day);
         var exactIdx = findConstellationIndex(exactSign.nameCN);
         orbitState.activeSignIndex = exactIdx;
-        updateGlow(exactIdx, 2);
+        _updateGlow(exactIdx, 2);
         hintEl.textContent = orbitState.month + '月' + orbitState.day + '日 · ' + exactSign.nameCN;
         confirmBtn.style.display = '';
         pulseCenterLabel(); // 月日汇聚反馈
@@ -791,19 +778,19 @@
         var signNames = MONTH_TO_SIGNS[orbitState.month];
         var idx = findConstellationIndex(signNames[0]);
         orbitState.activeSignIndex = idx;
-        updateGlow(idx, 1);
+        _updateGlow(idx, 1);
         hintEl.textContent = orbitState.month + '月 · ' + (signNames[0] || '—');
         confirmBtn.style.display = 'none';
       } else if (hasDay) {
         // 只选了日期 → 引导补选月份
         orbitState.activeSignIndex = -1;
-        updateGlow(-1, 0);
+        _updateGlow(-1, 0);
         hintEl.textContent = orbitState.day + '日 · 再点外圈选月份';
         confirmBtn.style.display = 'none';
       } else {
         // 都没选
         orbitState.activeSignIndex = -1;
-        updateGlow(-1, 0);
+        _updateGlow(-1, 0);
         hintEl.textContent = '点外圈选月份 · 点内圈选日期';
         confirmBtn.style.display = 'none';
       }
@@ -821,7 +808,7 @@
       orbitState.activeSignIndex = findConstellationIndex(sign.nameCN);
 
       // Canvas 发光等级 3（确认锁定）
-      updateGlow(orbitState.activeSignIndex, 3);
+      _updateGlow(orbitState.activeSignIndex, 3);
 
       // 庆祝粒子弧线（Canvas 中爆发金色粒子）
       if (typeof window._spawnCelebrate === 'function') {
@@ -860,7 +847,7 @@
       orbitState.day = 0;
       orbitState.activeSignIndex = -1;
       orbitState.confirmed = false;
-      updateGlow(-1, 0);
+      _updateGlow(-1, 0);
       clearHighlight();
       confirmBtn.style.display = 'none';
       resultEl.style.display = 'none';
@@ -1063,6 +1050,16 @@
   }
   var CONSTELLATIONS = buildConstellations();
 
+  /** 共享函数：更新 Canvas 星座发光状态（白天/夜间共用，避免主题切换时未定义） */
+  function _updateGlow(signIndex, level) {
+    for (var i = 0; i < CONSTELLATIONS.length; i++) {
+      CONSTELLATIONS[i].glowLevel = 0;
+    }
+    if (signIndex >= 0 && signIndex < CONSTELLATIONS.length && level > 0) {
+      CONSTELLATIONS[signIndex].glowLevel = level;
+    }
+  }
+
   function initStars() {
     var section = document.getElementById('zodiac-section');
     var canvas = document.getElementById('starchart-canvas');
@@ -1229,6 +1226,11 @@
     }
     // 暴露给 initOrbit 调用
     window._spawnStarBeam = spawnStarBeam;
+    /** 主题切换时清空 Canvas 残留粒子/光束，防止白天确认的粒子夜间突现 */
+    window._clearCanvasEffects = function () {
+      celebrateParticles = [];
+      starBeams = [];
+    };
 
     function hash(seed) {
       var x = Math.sin(seed) * 43758.5453;
@@ -1387,10 +1389,10 @@
           var ln = constellationLines[lr];
           var lco = CONSTELLATIONS[ln.constIndex];
           if ((lco.glowLevel || 0) >= 3 && lco._revealHold === 0) {
-            // 链式描画：同星座内前一条线画过 65% 后，本条才动笔
+            // 链式描画：同星座内前一条线画过 65% 后，本条才动笔（加微小随机延迟，增加手绘感）
             var prevLn = lr > 0 && constellationLines[lr - 1].constIndex === ln.constIndex
               ? constellationLines[lr - 1] : null;
-            if (!prevLn || prevLn.reveal > 0.65) {
+            if (!prevLn || prevLn.reveal > 0.65 + (Math.random() * 0.04)) {
               ln.reveal = Math.min(1, ln.reveal + 0.055);
             }
           } else {
@@ -1595,18 +1597,19 @@
           continue;
         }
 
-        // 激活：光晕随 g 连续增强；确认（g→3）转金色
+        // 激活：光晕随 g 连续增强；确认（g→3）转金色 — 用 shadowBlur 替代 createRadialGradient 减少 GC
         var gold = g >= 2.5;
         var gCol = gold ? '240,192,96' : theme.rgb;
         var glowR = nd.r * (3 + g * 2.4) * (nd.bright ? 1.15 : 1);
         var glowA = Math.min(0.9, 0.15 + g * 0.24);
-        var glow = ctx.createRadialGradient(nd.cx, nd.cy, 0, nd.cx, nd.cy, glowR);
-        glow.addColorStop(0, 'rgba(' + gCol + ',' + glowA + ')');
-        glow.addColorStop(1, 'rgba(' + gCol + ',0)');
+        ctx.save();
+        ctx.shadowBlur = glowR;
+        ctx.shadowColor = 'rgba(' + gCol + ',' + glowA + ')';
         ctx.beginPath();
-        ctx.arc(nd.cx, nd.cy, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = glow;
+        ctx.arc(nd.cx, nd.cy, nd.r * 0.3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + gCol + ',' + glowA + ')';
         ctx.fill();
+        ctx.restore();
 
         var dotA = Math.min(1, nAlpha + g * 0.25);
         ctx.beginPath();
@@ -1734,6 +1737,8 @@
       orbitState.activeSignIndex = -1;
       orbitState.confirmed = false;
       _updateGlow(-1, 0);
+      // 清空 Canvas 残留粒子/光束，防止白天确认的庆祝粒子在夜间突现
+      if (typeof window._clearCanvasEffects === 'function') window._clearCanvasEffects();
       _canvasVisible = toNight;
       var deck = document.getElementById('tarot-deck');
       var orbitRing = document.getElementById('orbit-ring');

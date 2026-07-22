@@ -13,6 +13,7 @@
       dir: 'assets/music/',    // 音乐目录
       startVolume: 0.20,       // 初始音量
       fadeInMs: 2000,          // 淡入时长（毫秒）
+      errorMaxCount: 3,        // 连续错误最大次数
     },
     particles: {
       count: 55,               // 粒子数量
@@ -28,6 +29,27 @@
         '240, 248, 255',       // 爱丽丝蓝
         '255, 245, 238',       // 贝壳色
       ],
+    },
+    fish: {
+      speed: 2.5,              // 恒定速度（px/帧）
+      idleTimeout: 4000,       // 鼠标静止后飞走延迟（ms）
+      minCursorDist: 70,       // 与光标最小距离（px）
+      inertIa: 0.08,           // 惯性系数
+      scareRange: 100,         // 受惊范围（px）
+      scareSpeed: 22,          // 受惊弹飞速度（px/帧）
+      scareDurationMin: 3000,  // 受惊恢复最短时间（ms）
+      scareDurationRand: 2000, // 受惊恢复随机增量（ms）
+    },
+    playlist: {
+      friction: 0.92,          // 惯性摩擦系数
+      wheelGain: 0.18,         // 滚轮 delta → 速度转换
+      maxSpeed: 10,            // 单帧最大位移（px）
+      maxSpeedChange: 1.8,     // 单次滚轮速度增量上限
+      springTension: 0.20,     // 弹性定位劲度
+      wheelSmoothAlpha: 0.55,  // 滚轮平滑系数（EWMA α）
+    },
+    loadBar: {
+      timeout: 8000,           // 超时强制完成（ms）
     },
   };
 
@@ -104,7 +126,6 @@
   let isPlaying = false;
   let currentIndex = 0;       // 当前播放索引
   let playMode = 2;           // 0=列表循环 1=单曲循环 2=随机（默认随机）
-  let animationId = null;
 
   // ==================== 共享 toast 队列 ====================
 
@@ -285,18 +306,15 @@
         const flicker = Math.sin(time * p.flickerSpeed + p.phase) * 0.3 + 0.7;
         const alpha = p.opacity * flicker;
 
-        // 绘制发光粒子
+        // 绘制发光粒子 — 用 shadowBlur 替代 createRadialGradient，减少 GC 压力
+        ctx.save();
+        ctx.shadowBlur = p.r * 5;
+        ctx.shadowColor = `rgba(${p.color}, ${alpha * 0.6})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-
-        // 内发光
-        const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 2.5);
-        gradient.addColorStop(0, `rgba(${p.color}, ${alpha})`);
-        gradient.addColorStop(0.4, `rgba(${p.color}, ${alpha * 0.5})`);
-        gradient.addColorStop(1, `rgba(${p.color}, 0)`);
-
-        ctx.fillStyle = gradient;
+        ctx.fillStyle = `rgba(${p.color}, ${alpha})`;
         ctx.fill();
+        ctx.restore();
       }
     }
 
@@ -314,9 +332,9 @@
     var pupil = cursorFish.querySelector('.fish-eye-pupil');
     var shine = cursorFish.querySelector('.fish-eye-shine');
 
-    var FISH_SPEED = 2.5;         // 恒定速度（px/帧）
-    var IDLE_TIMEOUT = 4000;      // 鼠标静止 4 秒后飞走
-    var MIN_CURSOR_DIST = 70;     // 追逐时与光标的最小距离
+    var FISH_SPEED = CONFIG.fish.speed;
+    var IDLE_TIMEOUT = CONFIG.fish.idleTimeout;
+    var MIN_CURSOR_DIST = CONFIG.fish.minCursorDist;
 
     // 鱼始终可见
     cursorFish.classList.add('visible');
@@ -379,7 +397,7 @@
       var moveMag = Math.sqrt(moveX * moveX + moveY * moveY);
 
       // 目标速度：从混合方向计算，惯性平滑过渡
-      var INERTIA = 0.08; // 惯性系数（越小惯性越明显）
+      var INERTIA = CONFIG.fish.inertIa;
 
       // 距光标较远时加速追赶（1.0x → 1.5x，300px 以上满速）
       var speedMult = 1;
@@ -443,12 +461,11 @@
       // ==== 渲染 ====
       // 平滑翻转：避免 scaleX 瞬时跳变
       fishFlipSmooth += (fishFlipTarget - fishFlipSmooth) * 0.08;
-      cursorFish.style.left = mouseX + 'px';
-      cursorFish.style.top = mouseY + 'px';
       cursorFish.style.transform =
+        'translate3d(' + mouseX + 'px, ' + mouseY + 'px, 0) ' +
         'translate(-42.1%, -51.6%) scaleX(' + fishFlipSmooth.toFixed(3) + ') rotate(' + fishAngle + 'deg)';
 
-      // ==== 瞳孔追踪 ====
+      // ==== 瞳孔追踪（带低通滤波，防止抖动） ====
       if (pupil) {
         if (blend > 0.3 && cursorDist > 10) {
           // 追逐模式：眼窝内追踪光标
@@ -460,16 +477,21 @@
           if (eyeError < -180) eyeError += 360;
           var clamped = Math.max(-35, Math.min(35, eyeError));
           // scaleX 会反转水平方向，用 fishFlip 补偿
-          var shiftX = (clamped / 35) * 1.6 * (fishFlipSmooth > 0 ? 1 : -1);
-          var shiftY = (clamped / 35) * 0.9;
-          pupil.setAttribute('cx', (22 + shiftX).toFixed(2));
-          pupil.setAttribute('cy', (29 + shiftY).toFixed(2));
+          var rawShiftX = (clamped / 35) * 1.6 * (fishFlipSmooth > 0 ? 1 : -1);
+          var rawShiftY = (clamped / 35) * 0.9;
+          // 低通滤波：每帧向目标值插值 30%，抑制微小抖动
+          if (pupil._smoothX == null) { pupil._smoothX = rawShiftX; pupil._smoothY = rawShiftY; }
+          pupil._smoothX += (rawShiftX - pupil._smoothX) * 0.30;
+          pupil._smoothY += (rawShiftY - pupil._smoothY) * 0.30;
+          pupil.setAttribute('cx', (22 + pupil._smoothX).toFixed(2));
+          pupil.setAttribute('cy', (29 + pupil._smoothY).toFixed(2));
           if (shine) {
-            shine.setAttribute('cx', (21 + shiftX * 0.65).toFixed(2));
-            shine.setAttribute('cy', (28 + shiftY * 0.65).toFixed(2));
+            shine.setAttribute('cx', (21 + pupil._smoothX * 0.65).toFixed(2));
+            shine.setAttribute('cy', (28 + pupil._smoothY * 0.65).toFixed(2));
           }
         } else {
           // 漫游模式：瞳孔归中
+          pupil._smoothX = null; pupil._smoothY = null;
           pupil.setAttribute('cx', '22');
           pupil.setAttribute('cy', '29');
           if (shine) {
@@ -481,7 +503,7 @@
     }
 
     // 点击任意位置 → 涟漪 + 鱼在范围内则逃跑（移动端无交互）
-    var FISH_SCARE_RANGE = 100; // 鱼受惊范围（px）
+    var FISH_SCARE_RANGE = CONFIG.fish.scareRange;
     document.addEventListener('click', function (e) {
       if (isMobile) return;
       // 涟漪
@@ -500,13 +522,13 @@
         // 立刻反向弹飞
         var awayX = dx / (dist || 1);
         var awayY = dy / (dist || 1);
-        fishVelX = awayX * 22;
-        fishVelY = awayY * 22;
+        fishVelX = awayX * CONFIG.fish.scareSpeed;
+        fishVelY = awayY * CONFIG.fish.scareSpeed;
         // 瞬间翻转面朝远离方向
         fishFlipTarget = awayX >= 0 ? -1 : 1;
         fishFlipSmooth = fishFlipTarget;
         // 3~5 秒后恢复正常
-        scaredUntil = Date.now() + 3000 + Math.random() * 2000;
+        scaredUntil = Date.now() + CONFIG.fish.scareDurationMin + Math.random() * CONFIG.fish.scareDurationRand;
       }
     });
 
@@ -735,24 +757,31 @@
     });
 
     audio.addEventListener('playing', function () {
+      _audioErrorCount = 0;
       updateLabel(currentIndex);
     });
 
     // === 播放结束 ===
     audio.addEventListener('ended', playNext);
 
-    // === 播放错误 → 自动跳过 ===
+    // === 播放错误 → 自动跳过（连续失败 3 次后停止提示） ===
+    var _audioErrorCount = 0;
     audio.addEventListener('error', function () {
       console.warn('音频加载错误：', audio.error ? audio.error.message : '未知错误');
       if (!started) { updateLabel(currentIndex); return; }
-      // 已开始播放的曲目出错 → 自动切到下一首
-      updateLabel(currentIndex);
+      // 已开始播放的曲目出错 → 计数检查
+      if (++_audioErrorCount >= CONFIG.music.errorMaxCount) {
+        showToast('⚠️ 多首曲目加载失败，请检查网络', 3000);
+        pause();
+        _audioErrorCount = 0;
+        return;
+      }
       showToast('⏭ 已跳过 · 下一首', 2000);
       // 等 toast 显示一会儿再切，避免连续快速切换
       setTimeout(function () {
         if (isPlaying) playNext();
       }, 300);
-    }, { once: false });
+    });
 
     // === 时间格式化 ===
     function formatTime(sec) {
@@ -780,7 +809,6 @@
 
     // === 进度条点击/拖拽跳转 ===
     if (progressBar) {
-      var progressSeeking = false;
       createSlider(progressBar, function (pct, isDown) {
         if (!audio.duration || pct < 0) return;
         progressSeeking = true;
@@ -880,16 +908,16 @@
     var scrollSpring = false; // 是否正在弹性定位
     var wheelActive = 0;      // 最后一帧滚轮输入的时间戳
 
-    // 物理常量
-    var FRICTION = 0.92;      // 摩擦系数（每帧衰减）
-    var WHEEL_GAIN = 0.18;    // 滚轮 delta → 速度转换系数
-    var MAX_SPEED = 10;       // 单帧最大位移 (px)
-    var MAX_SPEED_CHANGE = 1.8; // 单次滚轮事件速度增量上限，防止快速滚动跳跃感
-    var SPRING_TENSION = 0.20;// 弹性定位劲度
+    // 物理常量（从 CONFIG 读取）
+    var FRICTION = CONFIG.playlist.friction;
+    var WHEEL_GAIN = CONFIG.playlist.wheelGain;
+    var MAX_SPEED = CONFIG.playlist.maxSpeed;
+    var MAX_SPEED_CHANGE = CONFIG.playlist.maxSpeedChange;
+    var SPRING_TENSION = CONFIG.playlist.springTension;
 
     // 滚轮平滑滤波 — 用 EWMA 抑制尖峰 delta（如触控板惯性阶段的偶发大值）
     var _wheelSmooth = 0;
-    var WHEEL_SMOOTH_ALPHA = 0.55; // 平滑系数（越小越滞重）
+    var WHEEL_SMOOTH_ALPHA = CONFIG.playlist.wheelSmoothAlpha;
 
     function startScrollRaf() {
       if (scrollRaf) return;
@@ -1134,6 +1162,9 @@
   function applyNight(isNight) {
     var root = document.documentElement;
     root.classList.toggle('night-mode', isNight);
+    // 动态更新 theme-color（P4-2）
+    var meta = document.getElementById('theme-color-meta');
+    if (meta) meta.content = isNight ? '#132744' : '#B0D2E7';
     if (typeof window._onThemeSwitch === 'function') {
       window._onThemeSwitch(isNight);
     }
@@ -1152,15 +1183,12 @@
       iconPath.setAttribute('d', isNight ? ICON_MOON : ICON_SUN);
     }
 
-    var firstRun = true; // 载入时的初始设置不渐变
-
     function update() {
       if (_nightManual) return; // 手动模式覆盖自动
       var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       var hour = new Date().getHours();
       var isNight = prefersDark || hour >= 19 || hour < 6;
       applyNight(isNight);
-      firstRun = false;
       updateIcon();
     }
 
@@ -1283,9 +1311,19 @@
 
     timer = setTimeout(step, 100);
 
+    // 8 秒超时保险 — 防止资源加载卡死导致进度条永远停在 90%
+    var loadTimeout = setTimeout(function () {
+      clearTimeout(timer);
+      fill.classList.add('done');
+      setTimeout(function () {
+        if (bar.parentNode) bar.parentNode.removeChild(bar);
+      }, 500);
+    }, CONFIG.loadBar.timeout);
+
     // window.onload 时完成
     window.addEventListener('load', function () {
       clearTimeout(timer);
+      clearTimeout(loadTimeout);
       fill.classList.add('done');
       // 动画结束后移除 DOM
       setTimeout(function () {
