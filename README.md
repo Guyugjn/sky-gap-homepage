@@ -96,8 +96,7 @@ npx serve .
 ### 方式二：IIS（生产）
 
 1. 将整个项目复制到 IIS 站点目录
-2. 确保 IIS 安装了 URL 重写和静态压缩模块
-3. web.config 已配置缓存策略、安全头、压缩
+2. web.config 已配置缓存策略、安全头、压缩
 
 ### 方式三：任意 Web 服务器
 
@@ -140,7 +139,7 @@ Nginx、Apache、Caddy、GitHub Pages 均可直接部署（纯静态）。
 
 本项目在开发、优化和代码审查过程中使用了以下 AI 工具辅助：
 
-- **Claude Code（Anthropic）** — 代码编写、架构设计、代码审查、性能优化、文档生成
+- **Claude Code** — 代码编写、架构设计、代码审查、性能优化、文档生成
 - **DeepSeek** — 后端模型推理支持
 
 所有 AI 生成代码均经过人工审核和测试后合并。具体参与内容详见 [commit 记录](https://github.com/Guyugjn/sky-gap-homepage/commits/main)。
@@ -149,4 +148,5 @@ Nginx、Apache、Caddy、GitHub Pages 均可直接部署（纯静态）。
 
 ## 📜 许可
 
-MIT © 2026–2077 孤鱼GY
+- **本项目自有代码**：以 [MIT License](https://opensource.org/licenses/MIT) 发布。
+- **Live2D 看板娘组件**：基于 [live2d-widget](https://github.com/stevenjoezhang/live2d-widget)（[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html)），模型文件来自 [live2d-widget-model-izumi](https://github.com/stevenjoezhang/live2d-widget-model-izumi) 和 [live2d_api](https://github.com/fghrsh/live2d_api)。
