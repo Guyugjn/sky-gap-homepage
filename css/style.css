@@ -128,15 +128,6 @@ body {
   transition: width 0.15s ease-out, opacity 0.4s ease-out;
 }
 
-/* --- 天空背景 --- */
-.sky-bg {
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  /* 纯色背景 — 白天浅蓝 / 夜间深蓝，night-mode 变量自动切换 */
-  background: var(--sky-mid);
-}
-
 /* --- 粒子画布 --- */
 #particles-canvas {
   position: fixed;
@@ -491,10 +482,6 @@ body {
   pointer-events: none;
 }
 
-.avatar:not(.is-error) {
-  z-index: 1;
-}
-
 /* 头像占位（没有图片时显示） */
 .avatar-placeholder {
   width: 100%;
@@ -537,7 +524,7 @@ body {
   line-height: 2;
   max-width: 380px;
   margin-bottom: 2.2rem;
-  white-space: nowrap;
+  white-space: normal;
   animation: fade-up 0.6s 0.38s var(--ease-playful) both;
 }
 
@@ -625,8 +612,8 @@ body {
   align-items: stretch;
   gap: 0.5rem;
   background: var(--card-bg);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--card-border);
   border-radius: 24px;
   padding: 0.65rem 0.8rem 0.6rem;
@@ -729,6 +716,10 @@ body {
   padding: 0.35rem 0 0.65rem;
   scrollbar-width: thin;
   scrollbar-color: rgba(137, 196, 225, 0.3) transparent;
+  /* 防止滚动到边界时触发页面橡皮筋效果 */
+  overscroll-behavior-y: contain;
+  /* 允许垂直方向触摸滚动 */
+  touch-action: pan-y;
 }
 .playlist-inner::-webkit-scrollbar {
   width: 4px;
@@ -753,11 +744,23 @@ body {
   white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   position: relative;
 }
 .playlist-item:hover {
   background: var(--accent-soft);
   color: var(--text-primary);
+}
+
+/* 空歌单提示 */
+.playlist-empty {
+  display: block;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0.8rem 0.9rem;
+  user-select: none;
 }
 /* 序号 */
 .playlist-item .pl-index {
@@ -1227,10 +1230,10 @@ body {
     margin: 0 -0.85rem -0.6rem;
   }
   .music-playlist.open {
-    max-height: 155px;
+    max-height: min(175px, 40vh);
   }
   .playlist-inner {
-    max-height: 155px;
+    max-height: min(175px, 40vh);
   }
 
   .music-btn {
@@ -1273,7 +1276,7 @@ body {
 @media (hover: none) and (pointer: coarse) {
   .cloud span { filter: blur(3px); }
 }
-@media (-webkit-device-pixel-ratio: 3) {
+@media (-webkit-min-device-pixel-ratio: 3), (min-resolution: 3dppx) {
   .cloud span { filter: blur(2px); opacity: 0.6; }
 }
 
@@ -1829,8 +1832,8 @@ html.night-mode .tarot-deck {
   filter: drop-shadow(0 0 10px rgba(137, 196, 225, 0.25));
   /* 整体静止 — 内外圈各自独立旋转（CSS 变量驱动，JS 只更新 --outer-rot / --inner-rot） */
 }
-.orbit-outer-group { transform: rotate(var(--outer-rot, 0deg)); transform-origin: 300px 300px; }
-.orbit-inner-group { transform: rotate(var(--inner-rot, 0deg)); transform-origin: 300px 300px; }
+.orbit-outer-group { transform: rotate(var(--outer-rot, 0deg)); transform-origin: 50% 50%; }
+.orbit-inner-group { transform: rotate(var(--inner-rot, 0deg)); transform-origin: 50% 50%; }
 
 /* 轨道环 */
 .orbit-track {
@@ -2562,6 +2565,26 @@ html.night-mode .zodiac-grid {
   html.night-mode .fortune-tab:hover { background: rgba(30, 50, 75, 0.55) !important; color: rgba(180, 208, 228, 0.6) !important; }
   html.night-mode .orbit-redo:hover { background: rgba(25, 45, 70, 0.75) !important; color: var(--text-primary) !important; }
   html.night-mode .music-btn:hover { background: rgba(30, 50, 75, 0.55) !important; box-shadow: none !important; }
+}
+
+/* ============================================
+   减少动效偏好 — 尊重用户系统设置
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .cursor-fish .fish-wing {
+    animation: none !important;
+  }
+  .cloud-drift {
+    animation: none !important;
+  }
+  .click-ripple {
+    animation: none !important;
+  }
 }
 
 /* ============================================

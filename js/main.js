@@ -53,6 +53,9 @@
     },
   };
 
+  // ==================== 设备检测 ====================
+  var isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+
   // ==================== 共享工具 ====================
 
   /** ease-out cubic 缓动函数，用于音量淡入淡出等非 CSS 动画 */
@@ -280,11 +283,10 @@
       return arr;
     }
 
-    particles = createParticles();
-
     function draw(time) {
       ctx.clearRect(0, 0, w, h);
 
+      ctx.save();
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
 
@@ -307,15 +309,14 @@
         const alpha = p.opacity * flicker;
 
         // 绘制发光粒子 — 用 shadowBlur 替代 createRadialGradient，减少 GC 压力
-        ctx.save();
         ctx.shadowBlur = p.r * 5;
         ctx.shadowColor = `rgba(${p.color}, ${alpha * 0.6})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${p.color}, ${alpha})`;
         ctx.fill();
-        ctx.restore();
       }
+      ctx.restore();
     }
 
     particles = createParticles();
@@ -682,12 +683,15 @@
 
     function fadeInVolume() {
       if (fadeAnimId) cancelAnimationFrame(fadeAnimId);
+      // 从当前音量开始淡入，避免暂停→恢复时音量骤降至 0 再爬升
+      var startVol = audio.volume;
       var startTime = performance.now();
       function step(now) {
         var elapsed = now - startTime;
         if (elapsed < 0) elapsed = 0;
         var progress = Math.min(elapsed / CONFIG.music.fadeInMs, 1);
-        var val = volume * easeOutCubic(progress);
+        // 从 startVol 开始逐渐过渡到目标 volume
+        var val = startVol + (volume - startVol) * easeOutCubic(progress);
         if (val < 0) val = 0;
         audio.volume = val;
         if (progress < 1) {
@@ -700,10 +704,12 @@
     }
 
     var playHistory = []; // 随机模式播放历史栈，支持"上一首"回到真正听过的曲目
+    var MAX_HISTORY = 100; // 历史栈上限，防止无限增长
 
     // === 切歌逻辑 ===
 
     function playPrev() {
+      if (!totalTracks) { showToast('⚠️ 播放列表为空', 1500); return; }
       if (playMode === 2) {
         // 随机模式：从历史栈弹出上一首真正播放过的曲目
         if (playHistory.length === 0) {
@@ -721,6 +727,7 @@
     }
 
     function playNext() {
+      if (!totalTracks) { showToast('⚠️ 播放列表为空', 1500); return; }
       if (playMode === 1) {
         // 单曲循环
         audio.currentTime = 0;
@@ -730,6 +737,7 @@
       }
       if (playMode === 2) {
         // 随机：记录当前曲目到历史，再随机选下一首
+        if (playHistory.length >= MAX_HISTORY) playHistory.shift();
         playHistory.push(currentIndex);
         currentIndex = randomIndex();
       } else {
@@ -833,7 +841,8 @@
     function updateModeUI() {
       var m = modeIcons[playMode];
       modeBtn.className = 'music-btn music-btn--sm ' + m.cls;
-      modeBtn.querySelector('path').setAttribute('d', m.path);
+      var modePath = document.getElementById('mode-icon-path');
+      if (modePath) modePath.setAttribute('d', m.path);
       if (modeTip) modeTip.textContent = m.title;
     }
 
@@ -861,43 +870,83 @@
     var playlistEl = document.getElementById('music-playlist');
     var listInner = document.getElementById('playlist-inner');
     var listOpen = false;
+    var _outsideClickHandler = null; // 外部点击关闭
+
+    // 播放列表渲染缓存 — 避免每次打开重建 DOM
+    var _playlistRendered = false;
+
+    function selectTrack(idx) {
+      if (idx === currentIndex && started) return;
+      if (playMode === 2 && started) playHistory.push(currentIndex);
+      loadTrack(idx);
+      play();
+      notifySongChange();
+      scrollToListIndex(idx);
+    }
+
+    // 触摸防误触状态（事件委托共享）
+    var _touchState = null;
 
     function renderPlaylist() {
       if (!listInner) return;
 
-      var html = '';
-      for (var i = 0; i < totalTracks; i++) {
-        var isCurrent = (i === currentIndex && started);
-        var cls = isCurrent ? ' class="playlist-item current"' : ' class="playlist-item"';
-        html += '<span' + cls + ' data-index="' + i + '">' +
-                '<span class="pl-index">' + (i + 1) + '</span>' +
-                '<span class="pl-name">' + getDisplayName(i) + '</span>' +
-                '</span>';
+      if (!totalTracks) {
+        if (!_playlistRendered) {
+          listInner.innerHTML = '<span class="playlist-empty">🎵 歌单为空，请添加音乐文件</span>';
+          _playlistRendered = true;
+        }
+        return;
       }
-      listInner.innerHTML = html;
 
-      // 绑定点击
-      var items = listInner.querySelectorAll('.playlist-item');
-      for (var j = 0; j < items.length; j++) {
-        items[j].addEventListener('click', function () {
-          var idx = parseInt(this.dataset.index, 10);
-          if (idx === currentIndex && started) {
-            return;
-          }
-          if (playMode === 2 && started) {
-            playHistory.push(currentIndex);
-          }
-          loadTrack(idx);
-          play();
-          notifySongChange();
-          scrollToListIndex(idx);
+      if (!_playlistRendered) {
+        // 首次渲染：创建 DOM + 绑定事件委托
+        var html = '';
+        for (var i = 0; i < totalTracks; i++) {
+          var isCurrent = (i === currentIndex && started);
+          var cls = isCurrent ? ' class="playlist-item current"' : ' class="playlist-item"';
+          html += '<span' + cls + ' data-index="' + i + '">' +
+                  '<span class="pl-index">' + (i + 1) + '</span>' +
+                  '<span class="pl-name">' + getDisplayName(i) + '</span>' +
+                  '</span>';
+        }
+        listInner.innerHTML = html;
+
+        // 事件委托：click（桌面端）
+        listInner.addEventListener('click', function (e) {
+          var item = e.target.closest('.playlist-item');
+          if (!item) return;
+          selectTrack(parseInt(item.dataset.index, 10));
         });
+
+        // 事件委托：触摸防误触
+        listInner.addEventListener('touchstart', function (e) {
+          _touchState = { y: e.touches[0].clientY, moved: false };
+        }, { passive: true });
+
+        listInner.addEventListener('touchmove', function (e) {
+          if (_touchState && Math.abs(e.touches[0].clientY - _touchState.y) > 10) {
+            _touchState.moved = true;
+          }
+        }, { passive: true });
+
+        listInner.addEventListener('touchend', function (e) {
+          if (!_touchState || _touchState.moved) { _touchState = null; return; }
+          var item = e.target.closest('.playlist-item');
+          if (!item) { _touchState = null; return; }
+          selectTrack(parseInt(item.dataset.index, 10));
+          _touchState = null;
+        });
+
+        _playlistRendered = true;
+      } else {
+        // 已渲染过，仅更新高亮
+        var items = listInner.querySelectorAll('.playlist-item');
+        for (var k = 0; k < items.length; k++) {
+          items[k].classList.toggle('current', parseInt(items[k].dataset.index, 10) === currentIndex && started);
+        }
       }
 
-      // 滚动到当前曲目 — 用统一的缓动系统
-      if (started) {
-        scrollToListIndex(currentIndex);
-      }
+      if (started) scrollToListIndex(currentIndex);
     }
 
     // === 动量滚动系统 ===
@@ -1005,7 +1054,21 @@
       playlistEl.classList.add('open');
       listBtn && listBtn.classList.add('open');
       listOpen = true;
-      document.addEventListener('wheel', onPlaylistWheel, { passive: false });
+
+      // 桌面端：启用自定义动量滚动
+      if (!isTouchDevice) {
+        listInner.addEventListener('wheel', onPlaylistWheel, { passive: false });
+      }
+      // 移动端：完全交给原生滚动，不做任何拦截
+
+      _outsideClickHandler = function(e) {
+        if (!playlistEl || !listBtn) return;
+        if (playlistEl.contains(e.target) || listBtn.contains(e.target)) return;
+        closePlaylist();
+      };
+      setTimeout(function() {
+        if (listOpen) document.addEventListener('click', _outsideClickHandler);
+      }, 10);
     }
 
     function closePlaylist() {
@@ -1013,12 +1076,24 @@
       playlistEl.classList.remove('open');
       listBtn && listBtn.classList.remove('open');
       listOpen = false;
+
+      // 停止动量滚动
       cancelAnimationFrame(scrollRaf);
       scrollRaf = 0;
       scrollVel = 0;
       _wheelSmooth = 0;
       scrollSpring = false;
-      document.removeEventListener('wheel', onPlaylistWheel);
+
+      // 移除事件
+      if (listInner) {
+        listInner.removeEventListener('wheel', onPlaylistWheel);
+      }
+
+      // 移除外部点击监听
+      if (_outsideClickHandler) {
+        document.removeEventListener('click', _outsideClickHandler);
+        _outsideClickHandler = null;
+      }
     }
 
     if (listBtn) {
@@ -1027,14 +1102,6 @@
         if (listOpen) closePlaylist(); else openPlaylist();
       });
     }
-
-    // 点击播放器外部关闭列表
-    document.addEventListener('click', function (e) {
-      if (!listOpen || !playlistEl || !musicPlayer) return;
-      if (!musicPlayer.contains(e.target)) {
-        closePlaylist();
-      }
-    });
 
     // === 音量控制 ===
     function updateVolumeUI(vol) {
@@ -1050,9 +1117,7 @@
         if (pct < 0) return;
         volume = pct;
         audio.volume = volume;
-        volumeFill.style.width = (pct * 100) + '%';
-        if (volumePct) volumePct.textContent = Math.round(pct * 100) + '%';
-        updateVolumeIcon(volume);
+        updateVolumeUI(volume);
         // 持久化音量
         try { localStorage.setItem('gy_volume', pct.toFixed(3)); } catch (e) {}
       });
@@ -1068,24 +1133,31 @@
       } else {
         path = 'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z';
       }
-      volumeIcon.querySelector('path').setAttribute('d', path);
+      var volPath = document.getElementById('volume-icon-path');
+      if (volPath) volPath.setAttribute('d', path);
     }
 
-    // 音量按钮：点击切换静音/恢复
-    var volumePrev = volume; // 用于静音后恢复
+    // 音量按钮：点击切换静音/恢复（用 isMuted 标志消除与滑块的同步问题）
+    var _isMuted = false;
+    var _volumeBeforeMute = volume;
     volumeBtn.addEventListener('click', function () {
-      if (volume > 0.005) {
-        volumePrev = volume;
+      if (_isMuted) {
+        // 取消静音
+        _isMuted = false;
+        volume = _volumeBeforeMute || CONFIG.music.startVolume;
+        audio.volume = volume;
+        updateVolumeUI(volume);
+        try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
+      } else if (volume > 0.005) {
+        // 静音 — 保存当前音量（来自滑块的最新值）然后静音
+        _isMuted = true;
+        _volumeBeforeMute = volume;
         volume = 0;
         audio.volume = 0;
         updateVolumeUI(0);
         try { localStorage.setItem('gy_volume', '0'); } catch (e) {}
-      } else {
-        volume = volumePrev || CONFIG.music.startVolume;
-        audio.volume = volume;
-        updateVolumeUI(volume);
-        try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
       }
+      // volume 已为 0 时再点静音按钮无反应，避免状态混乱
     });
 
     // === 按钮事件 ===
@@ -1113,6 +1185,40 @@
     // === 初始化 UI ===
     updateModeUI();
     updateVolumeUI(volume);
+
+    // === 键盘快捷键 ===
+    document.addEventListener('keydown', function (e) {
+      // 输入框中不触发
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          if (isPlaying) pause(); else play();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (started) playPrev();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (started) playNext();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          volume = Math.min(1, volume + 0.05);
+          audio.volume = volume;
+          updateVolumeUI(volume);
+          try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          volume = Math.max(0, volume - 0.05);
+          audio.volume = volume;
+          updateVolumeUI(volume);
+          try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
+          break;
+      }
+    });
   }
 
   // ==================== 4. 云层鼠标视差 ====================
@@ -1238,48 +1344,100 @@
     }
   }
 
-  // ==================== 7. 访客足迹 ====================
+  // ==================== 7. 访客足迹（UTC 日期 + 情感化文案） ====================
 
   function initVisitor() {
     var el = document.getElementById('footer-visitor');
     if (!el) return;
 
     var STORAGE_KEY = 'gy_visit';
-    var now = Date.now();
-    var data;
+    var now = new Date();
+    var nowTime = now.getTime();
 
+    // ===== UTC 日期工具函数 =====
+    function getUTCDate(ts) {
+      var d = new Date(ts);
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+    var todayUTC = getUTCDate(nowTime);
+
+    var data;
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       data = raw ? JSON.parse(raw) : null;
-    } catch (e) {
-      data = null;
-    }
+    } catch (_) { data = null; }
 
-    if (!data) {
-      // 首次访问
-      data = { first: now, count: 1 };
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
-      var welcome = '欢迎你，第一位访客';
-      el.textContent = '🌊 ' + welcome;
+    // ===== 数据初始化或修复 =====
+    if (!data || typeof data.first !== 'number' || isNaN(data.first)) {
+      data = {
+        first: nowTime,      // 首次访问时间戳（永久不变）
+        last: nowTime,       // 上次访问时间戳
+        count: 1,            // 总访问次数
+        todayCount: 1,       // 今日访问次数
+        streak: 1,           // 连续访问天数
+        lastDate: todayUTC   // 上次访问的 UTC 日期
+      };
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
+      el.textContent = '✨ 初次来访，欢迎光临';
       return;
     }
 
-    // 同一天内不重复计数（按北京时间日期判断）
-    var firstDate = new Date(data.first).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
-    var today = new Date(now).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    // ===== 判断访问状态 =====
+    var lastDate = data.lastDate || getUTCDate(data.last || data.first);
+    var isNewDay = lastDate !== todayUTC;
 
-    if (firstDate !== today) {
-      // 不同天：计为新访问
-      data.count += 1;
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    // 更新数据
+    data.last = nowTime;
+    data.count += 1;
+
+    if (isNewDay) {
+      // 新的一天
+      data.todayCount = 1;
+      data.lastDate = todayUTC;
+      // 连续天数：昨天访问过则+1，否则重置
+      var yesterdayUTC = todayUTC - 86400000;
+      data.streak = (lastDate === yesterdayUTC) ? (data.streak || 1) + 1 : 1;
+    } else {
+      // 同一天
+      data.todayCount = (data.todayCount || 1) + 1;
     }
 
-    // 计算天数
-    var daysSinceFirst = Math.floor((now - data.first) / 86400000) + 1;
-    var daysText = daysSinceFirst <= 1 ? '第 1 天' : '第 ' + daysSinceFirst + ' 天';
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
 
-    var text = '第 ' + data.count + ' 次相遇 · ' + daysText;
-    el.textContent = '🌊 ' + text;
+    // ===== 生成情感化文案 =====
+    var count = data.count;
+    var todayCount = data.todayCount;
+    var streak = data.streak;
+    var totalDays = Math.max(1, Math.floor((nowTime - data.first) / 86400000) + 1);
+
+    var messages = [];
+
+    if (count === 1) {
+      messages.push('✨ 初次来访，欢迎光临');
+    } else if (isNewDay && streak >= 7) {
+      messages.push('🔥 连续 ' + streak + ' 天到访 · 第 ' + count + ' 次相遇');
+      messages.push('🌟 风雨无阻 ' + streak + ' 天 · 累计 ' + count + ' 次归来');
+    } else if (isNewDay && streak >= 3) {
+      messages.push('💫 连续 ' + streak + ' 天重逢 · 第 ' + count + ' 次相遇');
+      messages.push('🌊 第 ' + streak + ' 天打卡 · 累计 ' + count + ' 次');
+    } else if (isNewDay) {
+      messages.push('🌊 新的一天 · 第 ' + count + ' 次相遇');
+      messages.push('☀️ 欢迎回来 · 第 ' + count + ' 次到访');
+    } else if (todayCount > 1) {
+      messages.push('🌀 今天第 ' + todayCount + ' 次游来 · 累计 ' + count + ' 次');
+      messages.push('🐟 今日第 ' + todayCount + ' 次到访 · 共 ' + count + ' 次');
+    } else {
+      messages.push('🌊 第 ' + count + ' 次相遇 · 相识第 ' + totalDays + ' 天');
+      messages.push('💫 第 ' + count + ' 次重逢 · 相伴 ' + totalDays + ' 天');
+    }
+
+    // 基于日期种子随机挑选（同一天内保持一致）
+    var seed = todayUTC + (count % 7);
+    var idx = Math.abs(String(seed).split('').reduce(function(a, b) {
+      return a + b.charCodeAt(0);
+    }, 0)) % messages.length;
+
+    el.textContent = messages[idx];
   }
 
   // ==================== 8. 页面加载进度条 ====================

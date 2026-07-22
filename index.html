@@ -12,19 +12,43 @@
   <meta property="og:title" content="孤鱼GY · 天空之隙">
   <meta property="og:description" content="一条在天空之隙中游弋的飞鱼 — 探索星座运势、聆听音乐、与看板娘互动。">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="http://150.138.73.135:10256">
-  <meta property="og:image" content="http://150.138.73.135:10256/assets/avatar.jpg">
+  <meta property="og:url" content="http://www.080322.xyz">
+  <meta property="og:image" content="http://www.080322.xyz/assets/avatar.jpg">
+  <!-- JSON-LD 结构化数据（SEO 富摘要） -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "孤鱼GY",
+    "alternateName": "guyuGY",
+    "url": "http://www.080322.xyz",
+    "image": "http://www.080322.xyz/assets/avatar.jpg",
+    "description": "一条在天空之隙中游弋的飞鱼 — 探索星座运势、聆听音乐。",
+    "sameAs": [
+      "https://github.com/Guyugjn/sky-gap-homepage",
+      "https://space.bilibili.com/1249024266"
+    ]
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "孤鱼GY · 天空之隙",
+    "url": "http://www.080322.xyz",
+    "description": "孤鱼GY的个人主页 — 星座运势、音乐播放、互动看板娘"
+  }
+  </script>
   <meta property="og:site_name" content="孤鱼GY · 天空之隙">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="孤鱼GY · 天空之隙">
   <meta name="twitter:description" content="一条在天空之隙中游弋的飞鱼。">
-  <meta name="twitter:image" content="http://150.138.73.135:10256/assets/avatar.jpg">
+  <meta name="twitter:image" content="http://www.080322.xyz/assets/avatar.jpg">
   <meta name="theme-color" content="#B0D2E7" id="theme-color-meta">
   <link rel="icon" href="assets/favicon.svg">
   <!-- Ma Shan Zheng 马山正体 — 本地托管，不依赖 Google Fonts -->
   <link rel="stylesheet" href="assets/fonts/ma-shan-zheng.css">
-  <!-- Live2D CDN 预连接：后续加载模型时省去 DNS + TCP + TLS 往返 -->
   <link rel="stylesheet" href="css/style.css">
   <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
   <script defer src="assets/music/playlist.js"></script>
@@ -36,9 +60,6 @@
 <body>
   <!-- 页面加载进度条 -->
   <div id="load-bar"><div id="load-bar-fill"></div></div>
-
-  <!-- 天空渐变背景 -->
-  <div class="sky-bg"></div>
 
   <!-- 光粒子画布 -->
   <canvas id="particles-canvas"></canvas>
@@ -117,7 +138,8 @@
   </div>
 
   <!-- 主内容区 -->
-  <main class="hero">
+  <main>
+  <div class="hero">
     <!-- 头像 -->
     <div class="avatar-wrapper">
       <div class="avatar-ring"></div>
@@ -166,11 +188,11 @@
 
       <!-- 邮箱（点击复制） -->
       <div class="tip-wrap">
-        <a href="javascript:void(0)" class="social-link" id="email-btn">
+        <button type="button" class="social-link" id="email-btn" aria-label="复制邮箱地址">
           <svg viewBox="0 0 24 24" class="social-icon">
             <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
           </svg>
-        </a>
+        </button>
         <span class="social-tip">点击复制邮箱</span>
       </div>
       <!-- 日夜切换 -->
@@ -201,14 +223,14 @@
 
       <!-- 第二行：上一首 · 播放/暂停 · 下一首 -->
       <div class="music-controls">
-        <button class="music-btn music-btn--sm" id="prev-btn" title="上一首">
+        <button class="music-btn music-btn--sm" id="prev-btn" title="上一首" aria-label="上一首">
           <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
         </button>
         <button class="music-btn" id="music-btn" aria-label="播放 / 暂停">
           <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-play"><path d="M8 5v14l11-7z"/></svg>
           <svg viewBox="0 0 24 24" class="music-icon" id="music-icon-pause"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
         </button>
-        <button class="music-btn music-btn--sm" id="next-btn" title="下一首">
+        <button class="music-btn music-btn--sm" id="next-btn" title="下一首" aria-label="下一首">
           <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
         </button>
       </div>
@@ -226,20 +248,20 @@
           <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
         </button>
         <div class="mode-wrap">
-          <button class="music-btn music-btn--sm" id="mode-btn">
-            <svg viewBox="0 0 24 24" class="music-icon-sm"><path d="M7 7h10v2H7V7zm0 4h7v2H7v-2zm11-4h-2v6l-1.5-1.5-1.41 1.41L17 17l3.91-3.91-1.41-1.41L18 13.18V7z"/></svg>
+          <button class="music-btn music-btn--sm" id="mode-btn" aria-label="切换播放模式">
+            <svg viewBox="0 0 24 24" class="music-icon-sm"><path id="mode-icon-path" d="M7 7h10v2H7V7zm0 4h7v2H7v-2zm11-4h-2v6l-1.5-1.5-1.41 1.41L17 17l3.91-3.91-1.41-1.41L18 13.18V7z"/></svg>
           </button>
           <span class="mode-tip" id="mode-tip">列表循环</span>
         </div>
-        <button class="music-btn music-btn--sm" id="volume-btn" title="音量">
-          <svg viewBox="0 0 24 24" class="music-icon-sm" id="volume-icon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+        <button class="music-btn music-btn--sm" id="volume-btn" title="音量" aria-label="音量控制">
+          <svg viewBox="0 0 24 24" class="music-icon-sm" id="volume-icon"><path id="volume-icon-path" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
         </button>
         <div class="volume-bar-wrap" id="volume-bar"><div class="volume-fill" id="volume-fill"></div></div>
         <span class="volume-pct" id="volume-pct">20%</span>
       </div>
     </div>
 
-      </main>
+  </div><!-- .hero 结束 -->
   <section class="zodiac-section" id="zodiac-section">
     <!-- 星图背景（藏在 UI 后面） -->
     <canvas class="starchart-canvas" id="starchart-canvas"></canvas>
@@ -401,6 +423,7 @@
         </div>
     </div>
   </section>
+</main>
 
   <!-- 页脚 -->
   <footer class="site-footer">

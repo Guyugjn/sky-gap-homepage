@@ -205,6 +205,7 @@
     var cached = _fortuneCache[cacheKey];
     if (cached && Date.now() - cached.ts < 86400000) {
       document.getElementById('fortune-loading').style.display = 'none';
+      document.getElementById('fortune-error').style.display = 'none';
       renderFortune(cached.data);
       return;
     }
@@ -222,6 +223,7 @@
       })
       .then(function (json) {
         document.getElementById('fortune-loading').style.display = 'none';
+        document.getElementById('fortune-error').style.display = 'none';
         if (json.code === 200 && json.data) {
           _fortuneCache[cacheKey] = { data: json.data, ts: Date.now() };
           renderFortune(json.data);
@@ -229,7 +231,8 @@
           showFortuneError();
         }
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (err.name === 'AbortError') return; // 忽略取消请求
         showFortuneError();
       });
   }
@@ -282,7 +285,7 @@
     var confirmBtn = document.getElementById('tarot-confirm');
     var resultEl  = document.getElementById('orbit-result');
 
-    if (!dayGrid) return;
+    if (!monthsEl || !dayGrid) return;
 
     /* ---- 获取今天的真实日期 ---- */
     var today = new Date();
@@ -351,13 +354,8 @@
 
     /* ---- 发光 + 提示 ---- */
 
-    function fireBeam(gold) {
-      if (orbitState.month > 0 && orbitState.day > 0 && typeof window._spawnStarBeam === 'function') {
-        window._spawnStarBeam(orbitState.activeSignIndex, gold);
-      }
-    }
-
     function updateHint() {
+      if (!hintEl) return;
       hintEl.style.opacity = '';
       var hm = orbitState.month > 0, hd = orbitState.day > 0;
 
@@ -367,31 +365,31 @@
         orbitState.activeSignIndex = idx;
         _updateGlow(idx, 2);
         hintEl.textContent = orbitState.month + '月' + orbitState.day + '日 · ' + sign.nameCN;
-        oracleEl.textContent = sign.emoji;
-        confirmBtn.style.display = '';
-        fireBeam(false);
+        if (oracleEl) oracleEl.textContent = sign.emoji;
+        if (confirmBtn) confirmBtn.style.display = '';
+        fireStarBeam(false);
       } else if (hm) {
         var names = MONTH_TO_SIGNS[orbitState.month];
         var idx = findConstellationIndex(names[0]);
         orbitState.activeSignIndex = idx;
         _updateGlow(idx, 1);
         hintEl.textContent = orbitState.month + '月 · 选一个日期星丸';
-        oracleEl.textContent = '';
-        confirmBtn.style.display = 'none';
+        if (oracleEl) oracleEl.textContent = '';
+        if (confirmBtn) confirmBtn.style.display = 'none';
       } else if (hd) {
         orbitState.activeSignIndex = -1;
         _updateGlow(-1, 0);
         hintEl.textContent = orbitState.day + '日 · 再选一张月份符卡';
-        oracleEl.textContent = '';
-        confirmBtn.style.display = 'none';
+        if (oracleEl) oracleEl.textContent = '';
+        if (confirmBtn) confirmBtn.style.display = 'none';
       } else {
         orbitState.activeSignIndex = -1;
         _updateGlow(-1, 0);
         hintEl.textContent = '选月份符卡 · 再选日期星丸';
-        oracleEl.textContent = '';
-        confirmBtn.style.display = 'none';
+        if (oracleEl) oracleEl.textContent = '';
+        if (confirmBtn) confirmBtn.style.display = 'none';
       }
-      if (window.twemoji) window.twemoji.parse(oracleEl);
+      if (window.twemoji && oracleEl) window.twemoji.parse(oracleEl);
     }
 
     /* ---- 月份符卡点击 ---- */
@@ -434,7 +432,7 @@
       if (typeof window._spawnCelebrate === 'function') window._spawnCelebrate(orbitState.activeSignIndex);
       syncMonths(orbitState.month);
       syncDayHighlight(orbitState.day);
-      fireBeam(true);
+      fireStarBeam(true);
       confirmBtn.style.display = 'none';
       hintEl.style.opacity = '0';
       oracleEl.textContent = '';
@@ -522,11 +520,11 @@
     return -1;
   }
 
-  /** 计算该月天数 */
+  /** 计算该月天数（用 Date 准确判断闰年） */
   function daysInMonth(m) {
-    if (m === 2) return 29; // 简化处理，闰年兼容
-    if (m === 4 || m === 6 || m === 9 || m === 11) return 30;
-    return 31;
+    // new Date(year, m, 0) 返回 m 月的最后一天（Date 的 month 参数 0-based）
+    var year = new Date().getFullYear();
+    return new Date(year, m, 0).getDate();
   }
 
   function initOrbit() {
@@ -1226,10 +1224,23 @@
     }
     // 暴露给 initOrbit 调用
     window._spawnStarBeam = spawnStarBeam;
-    /** 主题切换时清空 Canvas 残留粒子/光束，防止白天确认的粒子夜间突现 */
+    /** 主题切换时清空 Canvas 残留粒子/光束/流星/连线状态，防止白天确认的粒子夜间突现 */
     window._clearCanvasEffects = function () {
       celebrateParticles = [];
       starBeams = [];
+      meteors = [];
+      // 清除星座连线 reveal 状态
+      if (typeof constellationLines !== 'undefined') {
+        for (var cli = 0; cli < constellationLines.length; cli++) {
+          constellationLines[cli].reveal = 0;
+        }
+      }
+      // 清除 _revealHold
+      if (typeof CONSTELLATIONS !== 'undefined') {
+        for (var conj = 0; conj < CONSTELLATIONS.length; conj++) {
+          CONSTELLATIONS[conj]._revealHold = null;
+        }
+      }
     };
 
     function hash(seed) {
@@ -1316,11 +1327,11 @@
       });
     }
 
-    /** 定时调度流星 — 每 2.5~7s 生成一颗，页面隐藏时跳过 */
+    /** 定时调度流星 — 每 2.5~7s 生成一颗，页面隐藏或白天模式跳过 */
     function scheduleMeteor() {
       var delay = 2500 + Math.random() * 4500;
       setTimeout(function () {
-        if (!document.hidden && W > 0) spawnMeteor();
+        if (!document.hidden && W > 0 && _canvasVisible) spawnMeteor();
         scheduleMeteor();
       }, delay);
     }
