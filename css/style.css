@@ -2568,26 +2568,6 @@ html.night-mode .zodiac-grid {
 }
 
 /* ============================================
-   减少动效偏好 — 尊重用户系统设置
-   ============================================ */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  .cursor-fish .fish-wing {
-    animation: none !important;
-  }
-  .cloud-drift {
-    animation: none !important;
-  }
-  .click-ripple {
-    animation: none !important;
-  }
-}
-
-/* ============================================
    Live2D 角色定位（CDN 版本）
    ============================================ */
 
