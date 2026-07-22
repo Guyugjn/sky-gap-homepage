@@ -1,0 +1,35 @@
+# 音乐文件（mp3 不上传）
+assets/music/*
+!assets/music/playlist.js
+
+# Twemoji 本地备用图片（15MB，CDN 已足够）
+assets/twemoji-72x72/
+
+# Python 字节码缓存
+__pycache__/
+*.pyc
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# SEO 文件（仅本地）
+robots.txt
+sitemap.xml
+
+# Quality Playbook
+quality/
+docs_gathered/
+**/docs_gathered/
+
+# 优化清单
+优化清单.md

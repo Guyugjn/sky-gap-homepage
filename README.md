@@ -2,6 +2,8 @@
 
 孤鱼GY 的个人主页 — 一条在天空之隙中游弋的飞鱼。
 
+[![在线预览](https://img.shields.io/badge/%F0%9F%8C%90%20%E5%9C%A8%E7%BA%BF%E9%A2%84%E8%A7%88-www.080322.xyz-4A90D9?style=for-the-badge)](https://www.080322.xyz)
+
 > 在像素与星空间，编织属于自己的小小世界
 
 ---
@@ -101,6 +103,10 @@ npx serve .
 ### 方式三：任意 Web 服务器
 
 Nginx、Apache、Caddy、GitHub Pages 均可直接部署（纯静态）。
+
+### 🌐 在线示例
+
+网站已部署至 **[www.080322.xyz](https://www.080322.xyz)** — 可直接访问预览。
 
 ---
 
