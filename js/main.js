@@ -204,7 +204,7 @@
     function onMove(e) {
       if (dragging) {
         e.preventDefault();
-        onChange(getPct(e));
+        onChange(getPct(e), true);
       }
     }
 
