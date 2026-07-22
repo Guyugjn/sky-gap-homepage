@@ -124,7 +124,8 @@
     var indexData = data.index || {};
     Object.keys(ID_MAP).forEach(function (key) {
       var refs = ID_MAP[key];
-      var pct = indexData[key] || '0%';
+      var rawPct = indexData[key];
+      var pct = (typeof rawPct === 'number' ? rawPct + '%' : rawPct) || '0%';
       var fillEl = document.getElementById(refs.fill);
       var pctEl = document.getElementById(refs.pct);
       if (fillEl) fillEl.style.width = pct;
@@ -544,6 +545,7 @@
     if (!orbitRing || !outerNodes || !innerNodes || !outerGroup || !innerGroup) return;
 
     var orbitSvg = orbitRing.querySelector('.orbit-svg');
+    if (!orbitSvg) return;
     var svgR = 300; // viewBox 半径
     var outerR = 240;
     var innerR = 140;
@@ -762,6 +764,9 @@
         _updateGlow(exactIdx, 2);
         hintEl.textContent = orbitState.month + '月' + orbitState.day + '日 · ' + exactSign.nameCN;
         confirmBtn.style.display = '';
+        confirmBtn.style.animation = 'none';
+        void confirmBtn.offsetHeight;
+        confirmBtn.style.animation = '';
         pulseCenterLabel(); // 月日汇聚反馈
         fireStarBeam(false); // 射出引导光束点亮星图
       } else if (hasMonth) {
@@ -939,7 +944,7 @@
     // 结果面板 — 重新选择
     resultEl.addEventListener('click', function (e) {
       var t = e.target;
-      if (t && t.id === 'orbit-redo') resetState();
+      if (t && (t.id === 'orbit-redo' || (t.parentNode && t.parentNode.id === 'orbit-redo'))) resetState();
     });
 
     // 初始提示 8s 后渐隐
@@ -1115,6 +1120,8 @@
     /** 在指定星座节点位置生成绚丽庆祝粒子（手机端从确认按钮位置爆发） */
     function spawnCelebrate(constIndex) {
       if (constIndex < 0) return;
+      // 白天模式临时显示 Canvas 以渲染庆祝粒子
+      if (canvas.style.display !== 'block') canvas.style.display = 'block';
       var srcX, srcY;
 
       if (window.innerWidth <= 768) {
@@ -1133,15 +1140,29 @@
           srcY = bRect.top + bRect.height / 2 - sRect.top;
         }
       } else {
-        // 桌面端：以星座中心为爆发源
-        var nodes = [];
-        for (var i = 0; i < cNodes.length; i++) {
-          if (cNodes[i].constIndex === constIndex) nodes.push(cNodes[i]);
+        if (!document.documentElement.classList.contains('night-mode')) {
+          // 白天模式：从确认按钮位置爆发
+          var sRect = section.getBoundingClientRect();
+          var btn = document.getElementById('tarot-confirm');
+          if (!btn) return;
+          var bRect = btn.getBoundingClientRect();
+          srcX = bRect.left + bRect.width / 2 - sRect.left;
+          srcY = bRect.top + bRect.height / 2 - sRect.top - 30;
+        } else {
+          // 夜间模式：以星座中心为爆发源
+          var nodes = [];
+          for (var i = 0; i < cNodes.length; i++) {
+            if (cNodes[i].constIndex === constIndex) nodes.push(cNodes[i]);
+          }
+          if (!nodes.length) return;
+          srcX = 0; srcY = 0;
+          for (var n = 0; n < nodes.length; n++) {
+            var nd = nodes[n];
+            srcX += nd.cx;
+            srcY += nd.cy;
+          }
+          srcX /= nodes.length; srcY /= nodes.length;
         }
-        if (!nodes.length) return;
-        srcX = 0; srcY = 0;
-        for (var n = 0; n < nodes.length; n++) { srcX += nodes[n].cx; srcY += nodes[n].cy; }
-        srcX /= nodes.length; srcY /= nodes.length;
       }
 
       // 主爆发 — 60 个多彩粒子向四周喷射
@@ -1326,7 +1347,8 @@
     }
 
     function update(timestamp) {
-      // 自由粒子：布朗漂移 + 弹簧回归
+      // 自由粒子：布朗漂移 + 弹簧回归（仅在夜间模式渲染）
+      if (_canvasVisible) {
       for (var i = 0; i < particles.length; i++) {
         var p = particles[i];
         if (p.cx === 0 && p.cy === 0) { p.cx = p.rx * W; p.cy = p.ry * H; }
@@ -1351,10 +1373,11 @@
         if (p.cy < -10) p.vy += 0.3;
         if (p.cy > H + 10) p.vy -= 0.3;
       }
+      } // end _canvasVisible
 
       // 星座节点：弹簧回归（无自主晃动，保持形状）+ 发光平滑插值
       // 手机端跳过星座节点更新（连线/光束/节点均不绘制，仅保留庆祝粒子和流星）
-      if (window.innerWidth > 768) {
+      if (window.innerWidth > 768 && _canvasVisible) {
         for (var j = 0; j < cNodes.length; j++) {
           var n = cNodes[j];
           if (n.cx === 0 && n.cy === 0) { n.cx = n.rx * W; n.cy = n.ry * H; }
@@ -1375,7 +1398,7 @@
 
       // 星座连线描画：确认后延迟片刻（等引导光束到达）开始逐笔勾勒；取消后渐隐
       // 手机端跳过连线描画状态更新（连线/光束/节点均不绘制）
-      if (window.innerWidth > 768) {
+      if (window.innerWidth > 768 && _canvasVisible) {
         for (var ch = 0; ch < CONSTELLATIONS.length; ch++) {
           var co = CONSTELLATIONS[ch];
           if ((co.glowLevel || 0) >= 3) {
@@ -1413,11 +1436,17 @@
         cpItem.life -= 16;
         if (cpItem.life <= 0) celebrateParticles.splice(cp, 1);
       }
+      // 白天模式粒子全部消散后恢复 Canvas 隐藏
+      if (celebrateParticles.length === 0 && !document.documentElement.classList.contains('night-mode')) {
+        canvas.style.display = '';
+      }
 
-      // 引导光束衰减
+      // 引导光束衰减（仅夜间模式）
+      if (_canvasVisible) {
       for (var sbu = starBeams.length - 1; sbu >= 0; sbu--) {
         starBeams[sbu].life -= 16;
         if (starBeams[sbu].life <= 0) starBeams.splice(sbu, 1);
+      }
       }
 
       // 流星位移衰减
@@ -1435,8 +1464,8 @@
       // 0. 透明清屏 — 透出全站纯色背景（白天浅蓝 / 夜间深蓝），星座区与页面同色
       ctx.clearRect(0, 0, W, H);
 
-      // 星座连线 — 未激活星座隐藏；手机端完全不画连线
-      if (window.innerWidth > 768) {
+      // 星座连线 — 未激活星座隐藏；手机端完全不画连线（夜间模式专属）
+      if (window.innerWidth > 768 && _canvasVisible) {
         ctx.lineWidth = 1;
         ctx.lineCap = 'round';
         for (var li = 0; li < constellationLines.length; li++) {
@@ -1465,8 +1494,8 @@
       }
       } // end if 桌面端画连线
 
-      // 星环 → 星座 引导光束：延伸（前 28%）→ 闪烁 ~2.5 次 → 淡出（手机端不画）
-      if (window.innerWidth > 768) {
+      // 星环 → 星座 引导光束：延伸（前 28%）→ 闪烁 ~2.5 次 → 淡出（手机端不画，夜间模式专属）
+      if (window.innerWidth > 768 && _canvasVisible) {
       for (var sbd = 0; sbd < starBeams.length; sbd++) {
         var bm = starBeams[sbd];
         var bt = 1 - bm.life / bm.maxLife;
@@ -1564,7 +1593,8 @@
         ctx.fill();
       }
 
-      // 2. 自由粒子
+      // 2. 自由粒子（仅夜间模式）
+      if (_canvasVisible) {
       for (var k = 0; k < particles.length; k++) {
         var p = particles[k];
         var tw = 1 + Math.sin(timestamp * p.twinkleSpeed + p.twinkleOffset) * 0.2;
@@ -1575,8 +1605,10 @@
         ctx.fillStyle = 'rgba(' + theme.rgb + ',' + alpha + ')';
         ctx.fill();
       }
+      }
 
-      // 3. 星座节点 — 仅显示 glowLevel > 0 的激活星座；手机端完全不画星座
+      // 3. 星座节点 — 仅显示 glowLevel > 0 的激活星座；手机端完全不画星座（夜间模式专属）
+      if (_canvasVisible) {
       for (var m = 0; m < cNodes.length; m++) {
         var nd = cNodes[m];
         // 手机端：跳过星座节点绘制（坐标仍保留供庆祝粒子/光束使用）
@@ -1619,13 +1651,15 @@
           : 'rgba(235, 244, 252, ' + dotA + ')';
         ctx.fill();
       }
+      } // end _canvasVisible
 
     }
 
     // ---- 主循环（注册到全局 rAF 调度） ----
 
     function tick(ts) {
-      if (!_canvasVisible || W <= 0 || H <= 0) return;
+      if (W <= 0 || H <= 0) return;
+      if (!_canvasVisible && celebrateParticles.length === 0) return;
       lerpTheme();
       update(ts);
       draw(ts);

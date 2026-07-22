@@ -818,7 +818,11 @@
     // === 进度条点击/拖拽跳转 ===
     if (progressBar) {
       createSlider(progressBar, function (pct, isDown) {
-        if (!audio.duration || pct < 0) return;
+        if (!audio.duration) return;
+        if (pct < 0) {
+          if (!isDown) progressSeeking = false;
+          return;
+        }
         progressSeeking = true;
         audio.currentTime = pct * audio.duration;
         progressFill.style.width = (pct * 100) + '%';
@@ -1167,6 +1171,7 @@
         if (!totalTracks) { showToast('⚠️ 播放列表为空，请运行 python generate_playlist.py'); return; }
         loadTrack(randomIndex());
         play();
+        notifySongChange();
         return;
       }
       if (isPlaying) pause(); else play();
@@ -1205,6 +1210,7 @@
           break;
         case 'ArrowUp':
           e.preventDefault();
+          if (_isMuted) _isMuted = false;
           volume = Math.min(1, volume + 0.05);
           audio.volume = volume;
           updateVolumeUI(volume);
@@ -1215,6 +1221,12 @@
           volume = Math.max(0, volume - 0.05);
           audio.volume = volume;
           updateVolumeUI(volume);
+          if (volume <= 0.005) {
+            _isMuted = true;
+            _volumeBeforeMute = 0.05;
+          } else if (_isMuted) {
+            _isMuted = false;
+          }
           try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
           break;
       }
