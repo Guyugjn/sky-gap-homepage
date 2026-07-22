@@ -48,7 +48,6 @@ SVG 宫崎骏风格飞鱼，三种行为模式：
 
 ### ♿ 无障碍
 - 所有按钮含 aria-label
-- 支持 prefers-reduced-motion 减少动效
 - 语义化 HTML 结构
 
 ---
@@ -134,6 +133,17 @@ Nginx、Apache、Caddy、GitHub Pages 均可直接部署（纯静态）。
 - Chrome / Edge / Firefox / Safari（最新版）
 - 移动端 iOS Safari / Android Chrome
 - 降级支持：backdrop-filter 不支持时自动 fallback
+
+---
+
+## 🤖 AI 辅助声明
+
+本项目在开发、优化和代码审查过程中使用了以下 AI 工具辅助：
+
+- **Claude Code（Anthropic）** — 代码编写、架构设计、代码审查、性能优化、文档生成
+- **DeepSeek** — 后端模型推理支持
+
+所有 AI 生成代码均经过人工审核和测试后合并。具体参与内容详见 [commit 记录](https://github.com/Guyugjn/sky-gap-homepage/commits/main)。
 
 ---
 
