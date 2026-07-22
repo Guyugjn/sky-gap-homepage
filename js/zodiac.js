@@ -188,9 +188,8 @@
     document.getElementById('fortune-error').style.display = 'block';
   }
 
-  /** 加载运势（含竞态保护 + 缓存，保存 1 天） */
+  /** 加载运势（含竞态保护，无缓存） */
   var _lastFortuneController = null;
-  var _fortuneCache = {};
 
   function loadFortune() {
     showFortuneLoading();
@@ -198,16 +197,6 @@
     // 取消上一个未完成的请求
     if (_lastFortuneController) {
       _lastFortuneController.abort();
-    }
-
-    // 缓存键：星座名 + 时间维度
-    var cacheKey = currentFortuneSign.name + '_' + currentFortuneTime;
-    var cached = _fortuneCache[cacheKey];
-    if (cached && Date.now() - cached.ts < 86400000) {
-      document.getElementById('fortune-loading').style.display = 'none';
-      document.getElementById('fortune-error').style.display = 'none';
-      renderFortune(cached.data);
-      return;
     }
 
     var controller = new AbortController();
@@ -225,7 +214,6 @@
         document.getElementById('fortune-loading').style.display = 'none';
         document.getElementById('fortune-error').style.display = 'none';
         if (json.code === 200 && json.data) {
-          _fortuneCache[cacheKey] = { data: json.data, ts: Date.now() };
           renderFortune(json.data);
         } else {
           showFortuneError();
@@ -366,7 +354,13 @@
         _updateGlow(idx, 2);
         hintEl.textContent = orbitState.month + '月' + orbitState.day + '日 · ' + sign.nameCN;
         if (oracleEl) oracleEl.textContent = sign.emoji;
-        if (confirmBtn) confirmBtn.style.display = '';
+        if (confirmBtn) {
+          confirmBtn.style.display = '';
+          // 强制回流，确保从 display:none 切换后 CSS 动画能重新触发
+          confirmBtn.style.animation = 'none';
+          void confirmBtn.offsetHeight;
+          confirmBtn.style.animation = '';
+        }
         fireStarBeam(false);
       } else if (hm) {
         var names = MONTH_TO_SIGNS[orbitState.month];
@@ -444,7 +438,6 @@
     }
 
     confirmBtn.addEventListener('click', doConfirm);
-    confirmBtn.addEventListener('touchend', function (e) { e.preventDefault(); doConfirm(); });
 
     function resetState() {
       clearAutoReset();
@@ -525,6 +518,13 @@
     // new Date(year, m, 0) 返回 m 月的最后一天（Date 的 month 参数 0-based）
     var year = new Date().getFullYear();
     return new Date(year, m, 0).getDate();
+  }
+
+  /** 引导光束 — 月日选齐时从星环射向星图上对应星座（Canvas 绘制，闪烁后消散） */
+  function fireStarBeam(gold) {
+    if (orbitState.month > 0 && orbitState.day > 0 && typeof window._spawnStarBeam === 'function') {
+      window._spawnStarBeam(orbitState.activeSignIndex, gold);
+    }
   }
 
   function initOrbit() {
@@ -640,13 +640,6 @@
       }
       parent.appendChild(rp);
       setTimeout(function () { if (rp.parentNode) rp.parentNode.removeChild(rp); }, 1200);
-    }
-
-    /** 引导光束 — 月日选齐时从星环射向星图上对应星座（Canvas 绘制，闪烁后消散） */
-    function fireStarBeam(gold) {
-      if (orbitState.month > 0 && orbitState.day > 0 && typeof window._spawnStarBeam === 'function') {
-        window._spawnStarBeam(orbitState.activeSignIndex, gold);
-      }
     }
 
     /** 中心标注脉冲 — 月日汇聚 / 确认时的反馈 */
@@ -940,10 +933,6 @@
 
     // 确认按钮
     confirmBtn.addEventListener('click', function () {
-      confirmSign();
-    });
-    confirmBtn.addEventListener('touchend', function (e) {
-      e.preventDefault(); // 阻止触摸后的模拟 click 造成二次确认
       confirmSign();
     });
 

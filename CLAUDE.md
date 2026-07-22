@@ -63,7 +63,7 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置和变换全部通过 `transf
 
 子模块：
 
-1. **运势**（`initFortune`）：API `v2.xxapi.cn/api/horoscope`，今日/周/月/年 Tab，`stripSource()` 过滤广告。卡片左右分栏（进度条 + 信息/概述 + 幸运宜忌）。移动端始终展开。**竞态保护**：`AbortController` 取消前次未完成请求，catch 区分 `AbortError` 不做 UI 操作。**缓存**：`_fortuneCache` 内存缓存 1 天 TTL，同键命中直接渲染不再请求。
+1. **运势**（`initFortune`）：API `v2.xxapi.cn/api/horoscope`，今日/周/月/年 Tab，`stripSource()` 过滤广告。卡片左右分栏（进度条 + 信息/概述 + 幸运宜忌）。移动端始终展开。**竞态保护**：`AbortController` 取消前次未完成请求，catch 区分 `AbortError` 不做 UI 操作。**无缓存**：每次切换星座或时间维度都发起新 API 请求。
 
 2. **白天模式：塔罗牌卡 + 星丸日期**（`initTarot`）：上排 12 张星座符卡（grid-6，毛玻璃），下排 31 个圆形星丸（flex-wrap）。选月触发 `syncDayDim` 将超天数星丸置灰（`dimmed`），选日自动清空另一侧。确认后结果流式排列，12s 复位。`_tarotInited` 防重复，`window._resetTarot` 暴露。
 
@@ -95,10 +95,12 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置和变换全部通过 `transf
 - **全局 rAF 禁止独立循环**：必须通过 `window._registerTick` 注册。
 - **CONSTELLATIONS 与 ZODIAC 同序**：均为黄道顺序（白羊 0 → 双鱼 11），`findConstellationIndex` 按中文名映射。
 - **`orbitState.activeSignIndex`** 是 CONSTELLATIONS 索引，确认时用 `getZodiacSign` 权威查询再转换。
-- **`_updateGlow`** 已共享化（全局函数，`CONSTELLATIONS` 定义后），白天/夜间/主题切换统一调用，无副本。`fireBeam` 已删除，统一使用 `fireStarBeam`。
+- **`_updateGlow`** 已共享化（全局函数，`CONSTELLATIONS` 定义后），白天/夜间/主题切换统一调用，无副本。
+- **`fireStarBeam`** 定义在 IIFE 顶层（`initOrbit()` 外部），白天/夜间共享调用，指引光束从星环中心射向星座 Canvas。`fireBeam` 旧名已删除，统一使用 `fireStarBeam`。
 - **结果面板 id 不同**：白天 `#orbit-result`（static），夜间 `#orbit-result-ring`（absolute）。
 - **日期星丸 class**：选中用 `active`，确认后用 `matched`。`syncDayDim` 控制 `dimmed`，`today` 由底部小圆点标记。
-- **确认后不显示 emoji**：`oracleEl.textContent = ''`。
+- **确认按钮强制回流**：`tarot-confirm`/`orbit-confirm` 从 `display:none` 切换显示后，需 `animation = 'none'` → `void offsetHeight` → `animation = ''` 三段式强制回流，确保 WebKit 系浏览器重启动画。
+- **确认按钮事件只绑定 `click`**：取消 `touchend` 监听，避免移动端 tap 模拟 click 导致双重触发。
 - **星空手机端降级**：星座节点弹簧更新、连线描画状态、连线绘制、节点绘制、光束绘制均跳过，仅保留自由粒子、庆祝粒子、流星；烟花从星环中心爆发（夜间）或确认按钮（白天）。流星含 `_canvasVisible` 检查确保白天不生成。
 - **星空颜色变量**：`--star-rgb` 等从 CSS 读取，日夜切换 `lerpTheme` 插值渐变。
 - **主题切换清理**：`_clearCanvasEffects` 清理 celebrateParticles、starBeams、meteors、constellationLines.reveal、_revealHold。
