@@ -53,6 +53,8 @@ SVG 宫崎骏风格飞鱼，三种行为模式：
 
 ### ♿ 无障碍
 - 所有按钮含 aria-label
+- 进度条/音量条含 ARIA slider 属性
+- 装饰性 Canvas 含 aria-hidden
 - 语义化 HTML 结构
 
 ---

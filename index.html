@@ -49,6 +49,9 @@
   <link rel="icon" href="assets/favicon.svg">
   <!-- Ma Shan Zheng 马山正体 — 本地托管，不依赖 Google Fonts -->
   <link rel="stylesheet" href="assets/fonts/ma-shan-zheng.css">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preload" href="assets/fonts/ma-shan-zheng.css" as="style">
+  <link rel="preload" href="assets/avatar.jpg" as="image">
   <link rel="stylesheet" href="css/style.css">
   <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
   <script defer src="assets/music/playlist.js"></script>
@@ -62,7 +65,7 @@
   <div id="load-bar"><div id="load-bar-fill"></div></div>
 
   <!-- 光粒子画布 -->
-  <canvas id="particles-canvas"></canvas>
+  <canvas id="particles-canvas" aria-hidden="true"></canvas>
 
   <!-- 浮动云层（视差 + 漂移） -->
   <!--
@@ -238,7 +241,7 @@
       <!-- 第三行：进度条 -->
       <div class="progress-wrap">
         <span class="time-label" id="time-current">0:00</span>
-        <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-bar" id="progress-bar" role="slider" aria-label="播放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0"><div class="progress-fill" id="progress-fill"></div></div>
         <span class="time-label" id="time-total">0:00</span>
       </div>
 
@@ -256,7 +259,7 @@
         <button class="music-btn music-btn--sm" id="volume-btn" title="音量" aria-label="音量控制">
           <svg viewBox="0 0 24 24" class="music-icon-sm" id="volume-icon"><path id="volume-icon-path" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
         </button>
-        <div class="volume-bar-wrap" id="volume-bar"><div class="volume-fill" id="volume-fill"></div></div>
+        <div class="volume-bar-wrap" id="volume-bar" role="slider" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" tabindex="0"><div class="volume-fill" id="volume-fill"></div></div>
         <span class="volume-pct" id="volume-pct">20%</span>
       </div>
     </div>
@@ -264,7 +267,7 @@
   </div><!-- .hero 结束 -->
   <section class="zodiac-section" id="zodiac-section">
     <!-- 星图背景（藏在 UI 后面） -->
-    <canvas class="starchart-canvas" id="starchart-canvas"></canvas>
+    <canvas class="starchart-canvas" id="starchart-canvas" aria-hidden="true"></canvas>
 
     <div class="zodiac-container">
       <div class="zodiac-title reveal-up d0">

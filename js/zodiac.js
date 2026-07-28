@@ -837,6 +837,85 @@
     }
 
     // 重置状态（重新选择）
+    // 退场动画防抖标志
+    var _resetting = false;
+
+    /** 带退场动画的重新选择（仅用于用户点击"重新选择"按钮） */
+    function animateResetState() {
+      if (_resetting) return; // 动画进行中，忽略重复点击
+      _resetting = true;
+      clearAutoReset();
+
+      // ===== 阶段1：触发退场动画 =====
+      // 金色节点闪烁白光 → 褪回默认蓝
+      outerNodes.querySelectorAll('.orbit-node.matched').forEach(function (n) {
+        n.classList.add('fading');
+      });
+      innerNodes.querySelectorAll('.orbit-node.matched').forEach(function (n) {
+        n.classList.add('fading');
+      });
+
+      // 四芒星光缩小淡出
+      if (sparkOuter && sparkOuter.classList.contains('gold')) {
+        sparkOuter.classList.add('fading');
+      }
+      if (sparkInner && sparkInner.classList.contains('gold')) {
+        sparkInner.classList.add('fading');
+      }
+
+      // 结果面板淡出
+      if (resultEl && resultEl.style.display !== 'none') {
+        resultEl.classList.add('fading');
+      }
+
+      // 中心标签退场脉冲
+      if (centerLabel) {
+        centerLabel.classList.add('fading');
+      }
+
+      // 星座连线退场：辉光回缩 + 发光水平降为 0
+      // 用 _glowDismiss 标记当前星座，让 draw() 中连线呈现亮金退场的反向描画
+      if (orbitState.activeSignIndex >= 0) {
+        CONSTELLATIONS[orbitState.activeSignIndex]._glowDismiss = 1.0;
+      }
+
+      // ===== 阶段2：动画结束后执行实际 DOM 重置 =====
+      setTimeout(function () {
+        // 状态重置
+        orbitState.month = 0;
+        orbitState.day = 0;
+        orbitState.activeSignIndex = -1;
+        orbitState.confirmed = false;
+        _updateGlow(-1, 0);
+
+        // DOM 清理
+        clearHighlight();
+        confirmBtn.style.display = 'none';
+        resultEl.style.display = 'none';
+        resultEl.innerHTML = '';
+        resultEl.classList.remove('fading');
+        hintEl.style.opacity = '';
+        hintEl.textContent = '点外圈选月份 · 点内圈选日期';
+        renderDayNodes(1);
+        hideSpark(sparkOuter);
+        hideSpark(sparkInner);
+        if (sparkOuter) sparkOuter.classList.remove('fading');
+        if (sparkInner) sparkInner.classList.remove('fading');
+        syncCenterLabel();
+        if (centerLabel) centerLabel.classList.remove('fading');
+
+        // 清除节点上的 fading class
+        outerNodes.querySelectorAll('.orbit-node.fading').forEach(function (n) {
+          n.classList.remove('fading');
+        });
+        innerNodes.querySelectorAll('.orbit-node.fading').forEach(function (n) {
+          n.classList.remove('fading');
+        });
+
+        _resetting = false;
+      }, 500);
+    }
+
     function resetState() {
       clearAutoReset();
       orbitState.month = 0;
@@ -941,10 +1020,10 @@
       confirmSign();
     });
 
-    // 结果面板 — 重新选择
+    // 结果面板 — 重新选择（带退场动画）
     resultEl.addEventListener('click', function (e) {
       var t = e.target;
-      if (t && (t.id === 'orbit-redo' || (t.parentNode && t.parentNode.id === 'orbit-redo'))) resetState();
+      if (t && (t.id === 'orbit-redo' || (t.parentNode && t.parentNode.id === 'orbit-redo'))) animateResetState();
     });
 
     // 初始提示 8s 后渐隐
@@ -1245,10 +1324,11 @@
           constellationLines[cli].reveal = 0;
         }
       }
-      // 清除 _revealHold
+      // 清除 _revealHold / _glowDismiss
       if (typeof CONSTELLATIONS !== 'undefined') {
         for (var conj = 0; conj < CONSTELLATIONS.length; conj++) {
           CONSTELLATIONS[conj]._revealHold = null;
+          CONSTELLATIONS[conj]._glowDismiss = 0;
         }
       }
     };
@@ -1397,10 +1477,16 @@
       }
 
       // 星座连线描画：确认后延迟片刻（等引导光束到达）开始逐笔勾勒；取消后渐隐
+      // 退场动画：_glowDismiss > 0 时连线呈现金色回缩退场（反向描画），不与正常 reveal 逻辑冲突
       // 手机端跳过连线描画状态更新（连线/光束/节点均不绘制）
       if (window.innerWidth > 768 && _canvasVisible) {
         for (var ch = 0; ch < CONSTELLATIONS.length; ch++) {
           var co = CONSTELLATIONS[ch];
+          // 退场动画光泽衰减
+          if (co._glowDismiss) {
+            co._glowDismiss = Math.max(0, co._glowDismiss - 0.012);
+            continue; // 退场中，跳过正常 reveal 逻辑
+          }
           if ((co.glowLevel || 0) >= 3) {
             if (co._revealHold == null) co._revealHold = 26; // ~430ms
             else if (co._revealHold > 0) co._revealHold--;
@@ -1411,6 +1497,13 @@
         for (var lr = 0; lr < constellationLines.length; lr++) {
           var ln = constellationLines[lr];
           var lco = CONSTELLATIONS[ln.constIndex];
+          // 退场动画中的连线：反向链式回缩，对称于入场描画速度
+          // 入场是 preview 链（前一根 ≥65% 后启动下一根），退场反过来——后画的线先缩完
+          if (lco._glowDismiss) {
+            // 退场留的残影足够长，不需要链式等待——全线同时以入场速度回缩
+            ln.reveal = Math.max(0, ln.reveal - 0.055);
+            continue;
+          }
           if ((lco.glowLevel || 0) >= 3 && lco._revealHold === 0) {
             // 链式描画：同星座内前一条线画过 65% 后，本条才动笔（加微小随机延迟，增加手绘感）
             var prevLn = lr > 0 && constellationLines[lr - 1].constIndex === ln.constIndex
@@ -1470,15 +1563,51 @@
         ctx.lineCap = 'round';
         for (var li = 0; li < constellationLines.length; li++) {
           var line = constellationLines[li];
-          if (line.reveal <= 0) continue;
-          // 未激活星座的连线跳过
-          if (!CONSTELLATIONS[line.constIndex] || (CONSTELLATIONS[line.constIndex].glowLevel || 0) === 0) continue;
+          var lco3 = CONSTELLATIONS[line.constIndex];
+          if (!lco3) continue;
+          var dismiss = lco3._glowDismiss || 0;
+          var isDismissing = dismiss > 0;
+          // 退场模式：即使 reveal 归零也继续渲染末端残留光点，直到辉光完全消散
+          if (!isDismissing && line.reveal <= 0) continue;
+          // 非退场时跳过未激活星座
+          if (!isDismissing && (lco3.glowLevel || 0) === 0) continue;
         var na = cNodes[line.a];
         var nb = cNodes[line.b];
         if (!na || !nb) continue;
 
         var lex = na.cx + (nb.cx - na.cx) * line.reveal;
         var ley = na.cy + (nb.cy - na.cy) * line.reveal;
+
+        if (isDismissing) {
+          // 退场连线：暖金辉光 + dissolve 粒子感
+          var drawLine = line.reveal > 0;
+          ctx.lineWidth = 1.2;
+          ctx.shadowColor = 'rgba(240, 192, 96, ' + (0.6 * dismiss) + ')';
+          ctx.shadowBlur = 4 * dismiss;
+
+          if (drawLine) {
+            ctx.beginPath();
+            ctx.moveTo(na.cx, na.cy);
+            ctx.lineTo(lex, ley);
+            ctx.strokeStyle = 'rgba(240, 192, 96, ' + (0.7 * dismiss) + ')';
+            ctx.stroke();
+          }
+
+          // 末端光点弥散放大 → 缩小淡出（reveal 归零后仅残留光点，持续到辉光完全消散）
+          var dotR = 1.8 + 3 * (1 - dismiss) + (drawLine ? 0.3 : 1.5 * (1 - dismiss));
+          var dotAlpha = drawLine
+            ? 0.8 * dismiss
+            : 0.5 * dismiss; // 线消失后光点继续衰减
+          ctx.beginPath();
+          ctx.arc(lex, ley, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(250, 225, 170, ' + dotAlpha + ')';
+          ctx.fill();
+
+          // 重置 shadow 和 lineWidth
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.lineWidth = 1;
+        } else {
         ctx.beginPath();
         ctx.moveTo(na.cx, na.cy);
         ctx.lineTo(lex, ley);
@@ -1490,6 +1619,7 @@
           ctx.arc(lex, ley, 1.8, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(250, 225, 170, 0.9)';
           ctx.fill();
+        }
         }
       }
       } // end if 桌面端画连线
@@ -1560,16 +1690,15 @@
         var col = cp.color || '240, 192, 96';
         var curR = cp.r * (0.4 + 0.6 * cpRatio);
 
-        // 外层柔光晕 — 大范围径向辉光
-        var glowR = curR * 4.5;
-        var glow = ctx.createRadialGradient(cp.cx, cp.cy, 0, cp.cx, cp.cy, glowR);
-        glow.addColorStop(0, 'rgba(' + col + ',' + (drawA * 0.55) + ')');
-        glow.addColorStop(0.4, 'rgba(' + col + ',' + (drawA * 0.18) + ')');
-        glow.addColorStop(1, 'rgba(' + col + ',0)');
+        // 外层柔光晕 — 用 shadowBlur 替代 createRadialGradient，减少 GC 压力
+        ctx.save();
+        ctx.shadowBlur = curR * 4.5;
+        ctx.shadowColor = 'rgba(' + col + ',' + (drawA * 0.55) + ')';
         ctx.beginPath();
-        ctx.arc(cp.cx, cp.cy, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = glow;
+        ctx.arc(cp.cx, cp.cy, curR * 0.3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + col + ',' + (drawA * 0.55) + ')';
         ctx.fill();
+        ctx.restore();
 
         // 流线拖尾 — 沿速度方向拉出渐变尾巴
         var tl = cp.trail * 14;

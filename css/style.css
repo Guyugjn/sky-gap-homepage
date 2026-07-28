@@ -2036,6 +2036,45 @@ html.night-mode .tarot-deck {
   100% { transform: translate(-50%, -50%) scale(1); }
 }
 
+/* ========== 星环退场动画 ========== */
+
+/* 确认态节点退场：短暂闪烁白光后褪回默认蓝色（退出用加速曲线 ease-in） */
+.orbit-node.matched.fading {
+  animation: orbit-node-fadeout 0.45s ease-in forwards;
+}
+
+@keyframes orbit-node-fadeout {
+  0%   { fill: #F5D08C; r: 5; filter: drop-shadow(0 0 6px rgba(240,192,96,0.8)); }
+  30%  { fill: #FFFFFF; r: 6; filter: drop-shadow(0 0 10px rgba(255,255,255,0.9)); }
+  100% { fill: #89C4E1; r: 4; filter: none; }
+}
+
+/* 四芒星光退场：缩小 + 淡出 */
+.orbit-spark.on.gold.fading {
+  animation: orbit-spark-shrink 0.35s ease-in forwards;
+}
+
+@keyframes orbit-spark-shrink {
+  0%   { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.2); }
+}
+
+/* 结果面板淡出（transition 方式，保持 transform 上下文兼容） */
+.orbit-result.fading {
+  opacity: 0;
+  transition: opacity 0.35s ease-out;
+}
+
+/* 中心标签退场脉冲（保持 translate(-50%, -50%) 居中不漂移） */
+.orbit-center-label.fading {
+  animation: orbit-label-fadeout 0.4s ease-in forwards;
+}
+
+@keyframes orbit-label-fadeout {
+  0%   { transform: translate(-50%, -50%) scale(1.15); color: #F5D08C; text-shadow: 0 0 12px rgba(240,192,96,0.6); }
+  100% { transform: translate(-50%, -50%) scale(1); color: inherit; text-shadow: 0 0 12px rgba(137, 196, 225, 0.5); }
+}
+
 /* 操作提示 */
 .orbit-hint {
   position: absolute;

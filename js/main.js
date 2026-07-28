@@ -652,7 +652,12 @@
 
     // 随机选曲
     function randomIndex() {
-      return Math.floor(Math.random() * totalTracks);
+      if (totalTracks <= 1) return 0;
+      var idx;
+      do {
+        idx = Math.floor(Math.random() * totalTracks);
+      } while (idx === currentIndex);
+      return idx;
     }
 
     var fadeAnimId = null; // 当前淡入/淡出动画 ID
@@ -811,6 +816,7 @@
       if (!progressSeeking) {
         var pct = (audio.currentTime / audio.duration) * 100;
         if (progressFill) progressFill.style.width = pct + '%';
+        if (progressBar) progressBar.setAttribute('aria-valuenow', Math.round(pct));
       }
       if (timeCurrent) timeCurrent.textContent = formatTime(audio.currentTime);
     });
@@ -1111,6 +1117,7 @@
     function updateVolumeUI(vol) {
       var pct = Math.round(vol * 100);
       if (volumeFill) volumeFill.style.width = pct + '%';
+      if (volumeBar) volumeBar.setAttribute('aria-valuenow', pct);
       if (volumePct) volumePct.textContent = pct + '%';
       updateVolumeIcon(vol);
     }
@@ -1195,6 +1202,9 @@
     document.addEventListener('keydown', function (e) {
       // 输入框中不触发
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      // ARIA slider 控件不触发，保留键盘操作给原生功能
+      var tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.getAttribute('role') === 'slider') return;
       switch (e.key) {
         case ' ':
           e.preventDefault();

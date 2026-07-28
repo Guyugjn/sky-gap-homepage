@@ -47,7 +47,7 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 - 智能预加载：当前曲目缓冲充足后下载下一首
 - 播放列表下拉动量滚动（参数见 `CONFIG.playlist`）
 - 静音管理：`_isMuted` + `_volumeBeforeMute` 独立管理
-- 键盘快捷键：空格播放/暂停、左右切歌、上下调音量（输入框中不触发）
+- 键盘快捷键：空格播放/暂停、左右切歌、上下调音量（输入框及 ARIA slider 控件中不触发）
 - 音频错误计数：连续失败达阈值后停止
 
 ### 星座星空模块（`zodiac.js`）
@@ -60,7 +60,7 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 
 2. **白天模式：塔罗符卡 + 星丸日期**（`initTarot`）：上排 12 星座符卡（grid-6，毛玻璃），下排 31 星丸（flex-wrap）。选月触发 `syncDayDim` 超天数置灰。确认后结果展示，12s 复位。
 
-3. **夜间模式：星环日轨**（`initOrbit`）：SVG 双环自转（CSS 变量 `--outer-rot`/`--inner-rot` 驱动）。点星 → 光束 → 涟漪 → 确认金色爆发。Canvas 3 级发光（`glowSmooth` 插值）。
+3. **夜间模式：星环日轨**（`initOrbit`）：SVG 双环自转（CSS 变量 `--outer-rot`/`--inner-rot` 驱动）。点星 → 光束 → 涟漪 → 确认金色爆发 → 结果面板。Canvas 3 级发光（`glowSmooth` 插值）。重新选择时星座连线反向描画退场（`_glowDismiss`），节点/四芒/面板同步 CSS 退场动画，500ms 后 DOM 复位。
 
 4. **星空 Canvas**（`initStars`）：200 自由粒子（移动端 100），12 星座锚点。`_canvasVisible` 控制渲染启停——白天仅在有庆祝粒子时临时激活（仅渲染粒子）。手机端（≤768px）跳过星座节点/连线/光束，仅保留自由粒子、庆祝粒子、流星。流星仅在夜间生成。
 
@@ -80,10 +80,11 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 - **日期星丸 class**：选中 `active`，确认 `matched`，超月天数 `dimmed`。
 - **确认按钮强制回流**：`display:none` 切换后需 `animation='none'` → `void offsetHeight` → `animation=''` 三段式确保 WebKit 重启动画。
 - **确认按钮只绑定 `click`**：不绑 `touchend`，防移动端双重触发。
-- **主题切换清理**：`_clearCanvasEffects` 清除庆祝粒子/光束/流星/连线状态。
+- **主题切换清理**：`_clearCanvasEffects` 清除庆祝粒子/光束/流星/连线状态及 `_glowDismiss` 退场标记。
 - **星空颜色变量**：CSS 变量驱动，`lerpTheme` 插值渐变。
 - **飞鱼 SVG**：默认朝左，`scaleX(-1)` = 朝右，`transform-origin: 42.1% 51.6%`。
 - **CSS 兼容**：避免 `:has()`，`backdrop-filter` 有 `@supports` 降级。
 - **Twemoji**：`.emoji` 类 `pointer-events: none`；动态 emoji 须手动 `twemoji.parse()`。
 - **静音管理**：键盘调音量时同步处理 `_isMuted` 状态，防止标志位与实际音量脱节。
+- **键盘守卫排除**：`INPUT`、`TEXTAREA`、`role="slider"` 元素中键盘快捷键不触发，保留原生功能。
 - **IIS**：`.moc`/`.mtn` 通过 `live2d/web.config` 注册 MIME；`web.config` 含分层缓存和安全头。
