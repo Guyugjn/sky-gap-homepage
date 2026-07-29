@@ -77,13 +77,11 @@ SVG 宫崎骏风格飞鱼，三种行为模式：
 │   ├── avatar.jpg
 │   ├── favicon.svg
 │   ├── twemoji.min.js
-│   ├── twemoji-72x72/      # 本地 emoji 库
 │   └── music/              # 音频文件
 │       └── playlist.js     # 自动生成的播放列表
 ├── generate_playlist.py    # 扫描音乐目录生成 playlist.js
 ├── web.config              # IIS 缓存策略 + 安全头
-├── robots.txt
-└── sitemap.xml
+└── LICENSE
 ```
 
 ---
