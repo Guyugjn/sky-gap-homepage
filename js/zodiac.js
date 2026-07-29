@@ -554,16 +554,12 @@
     var outerRot = 0;
     var innerRot = 0;
 
-    function applyRot() {
-      orbitSvg.style.setProperty('--outer-rot', outerRot + 'deg');
-      orbitSvg.style.setProperty('--inner-rot', innerRot + 'deg');
-    }
-
     // 星环自转 — 外圈顺时针、内圈逆时针，选星/确认均不打断，永不停歇
     var DRIFT_OUTER = 0.02;  // 度/帧 ≈ 1.2°/s，约 5 分钟一圈
     var DRIFT_INNER = -0.03; // 内圈反向略快
 
-    /** 持续自转 — 注册到全局 rAF 调度（main.js _globalLoop） */
+    /** 持续自转 — 注册到全局 rAF 调度（main.js _globalLoop）
+     *  直接操作 style.transform，绕过 CSS 变量解析链路，避免 DOM 重建时竞争渲染管线 */
     function rotTick() {
       if (orbitRing.style.display === 'none') return;
       outerRot += DRIFT_OUTER;
@@ -571,7 +567,13 @@
       // 角度防溢出归一（页面长时间挂机）
       if (outerRot > 36000) outerRot -= 36000;
       if (innerRot < -36000) innerRot += 36000;
-      applyRot();
+      // 直接设置 transform：style.transform 直接提交 Compositor 层，子节点 DOM 变化不干扰旋转
+      if (outerGroup) {
+        outerGroup.style.transform = 'rotate(' + outerRot.toFixed(2) + 'deg)';
+      }
+      if (innerGroup) {
+        innerGroup.style.transform = 'rotate(' + innerRot.toFixed(2) + 'deg)';
+      }
     }
     if (typeof window._registerTick === 'function') {
       window._registerTick(rotTick);
@@ -685,27 +687,48 @@
     }
 
     // ---- 渲染内圈日期节点（初始 31 天，随月份变化） ----
-    function renderDayNodes(month) {
-      innerNodes.innerHTML = '';
-      var count = daysInMonth(month || 1);
-      var frag = document.createDocumentFragment();
-      for (var d = 1; d <= count; d++) {
-        var angle = (d - 1) / count * Math.PI * 2 - Math.PI / 2;
+    /** 初始化时一次性创建 31 个星点（1 月 31 天为默认均匀分布） */
+    function initDayNodes() {
+      for (var d = 1; d <= 31; d++) {
+        var angle = (d - 1) / 31 * Math.PI * 2 - Math.PI / 2;
         var cx = svgR + innerR * Math.cos(angle);
         var cy = svgR + innerR * Math.sin(angle);
-        var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', cx);
-        circle.setAttribute('cy', cy);
-        circle.setAttribute('r', '3');
-        circle.setAttribute('class', 'orbit-node');
-        circle.dataset.day = d;
-        circle.style.setProperty('--twinkle-dur', (3 + Math.random() * 3).toFixed(1) + 's');
-        circle.style.setProperty('--twinkle-delay', (-Math.random() * 4).toFixed(1) + 's');
-        frag.appendChild(circle);
+        var node = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        node.setAttribute('cx', cx);
+        node.setAttribute('cy', cy);
+        node.setAttribute('r', '3');
+        node.setAttribute('class', 'orbit-node');
+        node.style.setProperty('--twinkle-dur', (3 + Math.random() * 3).toFixed(1) + 's');
+        node.style.setProperty('--twinkle-delay', (-Math.random() * 4).toFixed(1) + 's');
+        innerNodes.appendChild(node);
       }
-      innerNodes.appendChild(frag);
     }
-    renderDayNodes(1); // 默认显示 31 天
+
+    /** 切换月份时重新分布可见星点坐标 + 更新 data-day 映射 */
+    function syncDayNodes(month) {
+      var count = daysInMonth(month || 1);
+      var nodes = innerNodes.querySelectorAll('.orbit-node');
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        var d = i + 1;
+        if (d <= count) {
+          // 按当月天数均匀分布角度，CSS transition 平滑过渡到目标坐标
+          var angle = (d - 1) / count * Math.PI * 2 - Math.PI / 2;
+          var cx = svgR + innerR * Math.cos(angle);
+          var cy = svgR + innerR * Math.sin(angle);
+          node.setAttribute('cx', cx);
+          node.setAttribute('cy', cy);
+          node.style.display = '';
+          node.dataset.day = d;
+          node.classList.remove('active', 'matched', 'fading');
+        } else {
+          node.style.display = 'none';
+          node.classList.remove('active', 'matched', 'fading');
+        }
+      }
+    }
+    initDayNodes();    // 一次性创建 31 个固定星点
+    syncDayNodes(1);   // 默认激活 1 月的 31 天
 
     // 高亮外圈节点
     function highlightOuter(month) {
@@ -896,7 +919,7 @@
         resultEl.classList.remove('fading');
         hintEl.style.opacity = '';
         hintEl.textContent = '点外圈选月份 · 点内圈选日期';
-        renderDayNodes(1);
+        syncDayNodes(1);
         hideSpark(sparkOuter);
         hideSpark(sparkInner);
         if (sparkOuter) sparkOuter.classList.remove('fading');
@@ -929,7 +952,7 @@
       resultEl.innerHTML = '';
       hintEl.style.opacity = '';
       hintEl.textContent = '点外圈选月份 · 点内圈选日期';
-      renderDayNodes(1);
+      syncDayNodes(1);
       hideSpark(sparkOuter);
       hideSpark(sparkInner);
       syncCenterLabel();
@@ -955,20 +978,26 @@
       clearAutoReset();
       spawnRipple(outerGroup, node.getAttribute('cx'), node.getAttribute('cy'), '30px');
       var month = parseInt(node.dataset.month);
+      var monthChanged = orbitState.month !== month;
       orbitState.month = month;
-      // 换月重绘内圈（天数可能不同）；已选日期保留，超出新月天数则清除
-      renderDayNodes(month);
+
       if (orbitState.day > daysInMonth(month)) orbitState.day = 0;
+
+      highlightOuter(month);
+      showSpark(sparkOuter, node);
+
+      // 同步执行即可——syncDayNodes 只做 setAttribute + 显隐，极轻量
+      if (monthChanged) {
+        syncDayNodes(month);
+      }
       if (orbitState.day > 0) {
-        // 恢复日期高亮与四芒（新月份节点角度可能不同，重新定位）
         highlightInner(orbitState.day);
         var dayNode = innerNodes.querySelector('[data-day="' + orbitState.day + '"]');
         if (dayNode) showSpark(sparkInner, dayNode);
       } else {
         hideSpark(sparkInner);
       }
-      highlightOuter(month);
-      showSpark(sparkOuter, node);
+
       updateHintAndButton();
       scheduleAutoReset();
     }
@@ -984,7 +1013,7 @@
       scheduleAutoReset();
     }
 
-    // ---- 节点点击：事件委托绑在容器上，renderDayNodes 重建节点后无需重绑 ----
+    // ---- 节点点击：事件委托绑在容器上，initDayNodes 固定坐标无需重绑 ----
     // 已确认时点击星环无效（复位入口为结果面板的「重新选择」按钮）
     outerNodes.addEventListener('click', function (e) {
       var n = e.target;

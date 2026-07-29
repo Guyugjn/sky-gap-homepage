@@ -1830,10 +1830,10 @@ html.night-mode .tarot-deck {
   width: 100%;
   height: 100%;
   filter: drop-shadow(0 0 10px rgba(137, 196, 225, 0.25));
-  /* 整体静止 — 内外圈各自独立旋转（CSS 变量驱动，JS 只更新 --outer-rot / --inner-rot） */
+  /* 整体静止 — 内外圈各自独立旋转（JS rAF 直接驱动 style.transform，Compositor-only） */
 }
-.orbit-outer-group { transform: rotate(var(--outer-rot, 0deg)); transform-origin: 50% 50%; }
-.orbit-inner-group { transform: rotate(var(--inner-rot, 0deg)); transform-origin: 50% 50%; }
+.orbit-outer-group { transform: rotate(0deg); transform-origin: 300px 300px; transition: none; }
+.orbit-inner-group { transform: rotate(0deg); transform-origin: 300px 300px; transition: none; }
 
 /* 轨道环 */
 .orbit-track {
@@ -1884,7 +1884,7 @@ html.night-mode .tarot-deck {
 .orbit-inner-nodes .orbit-node {
   fill: url(#orbit-star-blue);
   r: 6;
-  transition: fill 0.35s ease, r 0.35s ease, filter 0.35s ease;
+  transition: fill 0.35s ease, r 0.35s ease, filter 0.35s ease, cx 0.45s ease-out, cy 0.45s ease-out;
 }
 .orbit-inner-nodes .orbit-node.active {
   fill: url(#orbit-star-lit);
@@ -1943,7 +1943,7 @@ html.night-mode .tarot-deck {
   cursor: pointer;
   stroke: transparent;
   stroke-width: 40px;
-  transition: fill 0.35s ease, r 0.35s ease, filter 0.35s ease;
+  transition: fill 0.35s ease, r 0.35s ease, filter 0.35s ease, cx 0.45s ease-out, cy 0.45s ease-out;
   /* 呼吸闪烁 — 每颗星随机周期/相位（JS 设置变量），选中后停闪保持稳定 */
   animation: star-twinkle var(--twinkle-dur, 4s) ease-in-out infinite;
   animation-delay: var(--twinkle-delay, 0s);
@@ -1969,6 +1969,13 @@ html.night-mode .tarot-deck {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.35s ease;
+}
+/* 确保旋转组和四芒星不受祖先 transition 污染，防止节点重建时与自转竞争同一帧 */
+#orbit-outer-group,
+#orbit-inner-group,
+#orbit-spark-outer,
+#orbit-spark-inner {
+  transition: none;
 }
 .orbit-spark-pos.on {
   opacity: 1;

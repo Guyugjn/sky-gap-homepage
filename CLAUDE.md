@@ -60,7 +60,7 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 
 2. **白天模式：塔罗符卡 + 星丸日期**（`initTarot`）：上排 12 星座符卡（grid-6，毛玻璃），下排 31 星丸（flex-wrap）。选月触发 `syncDayDim` 超天数置灰。确认后结果展示，12s 复位。
 
-3. **夜间模式：星环日轨**（`initOrbit`）：SVG 双环自转（CSS 变量 `--outer-rot`/`--inner-rot` 驱动）。点星 → 光束 → 涟漪 → 确认金色爆发 → 结果面板。Canvas 3 级发光（`glowSmooth` 插值）。重新选择时星座连线反向描画退场（`_glowDismiss`），节点/四芒/面板同步 CSS 退场动画，500ms 后 DOM 复位。
+3. **夜间模式：星环日轨**（`initOrbit`）：SVG 双环自转（rAF 直接驱动 `style.transform`，Compositor-only）。内圈日期节点增量更新（复用 + 隐藏多余），`transform-origin: 300px 300px` 绝对坐标固定旋转中心。点星 → 光束 → 涟漪 → 确认金色爆发 → 结果面板。Canvas 3 级发光（`glowSmooth` 插值）。重新选择时星座连线反向描画退场（`_glowDismiss`），节点/四芒/面板同步 CSS 退场动画，500ms 后 DOM 复位。
 
 4. **星空 Canvas**（`initStars`）：200 自由粒子（移动端 100），12 星座锚点。`_canvasVisible` 控制渲染启停——白天仅在有庆祝粒子时临时激活（仅渲染粒子）。手机端（≤768px）跳过星座节点/连线/光束，仅保留自由粒子、庆祝粒子、流星。流星仅在夜间生成。
 
