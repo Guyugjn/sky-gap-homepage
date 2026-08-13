@@ -43,9 +43,9 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 四行卡片式 UI（曲名 → 控制 → 进度条 → 列表/模式/音量）。核心设计：
 
 - 进度条/音量条通过 `createSlider` 工厂统一处理拖拽（`mousedown`/`touchstart`）
-- 播放列表：事件委托 + DOM 缓存（首次渲染后仅更新高亮）
+- 播放列表：事件委托 + DOM 缓存（首次渲染后仅更新高亮）；开关只由 ☰ 按钮控制，不监听外部点击关闭
 - 智能预加载：当前曲目缓冲充足后下载下一首
-- 播放列表下拉动量滚动（参数见 `CONFIG.playlist`）
+- 播放列表滚动：桌面端滚轮动量滚动（参数见 `CONFIG.playlist`）+ 弹簧定位；移动端瞬时跳转定位（不启动 rAF 循环，避免与原生触摸滚动冲突）
 - 静音管理：`_isMuted` + `_volumeBeforeMute` 独立管理
 - 键盘快捷键：空格播放/暂停、左右切歌、上下调音量（输入框及 ARIA slider 控件中不触发）
 - 音频错误计数：连续失败达阈值后停止
@@ -86,5 +86,6 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 - **CSS 兼容**：避免 `:has()`，`backdrop-filter` 有 `@supports` 降级。
 - **Twemoji**：`.emoji` 类 `pointer-events: none`；动态 emoji 须手动 `twemoji.parse()`。
 - **静音管理**：键盘调音量时同步处理 `_isMuted` 状态，防止标志位与实际音量脱节。
+- **播放列表移动端滚动**：`scrollToListIndex` 在触屏设备直接赋值 `scrollTop`（瞬时跳转）并 return，禁止启动 rAF 弹簧循环——否则持续写 scrollTop 会与原生触摸滚动打架，列表会拖不动。
 - **键盘守卫排除**：`INPUT`、`TEXTAREA`、`role="slider"` 元素中键盘快捷键不触发，保留原生功能。
 - **IIS**：`.moc`/`.mtn` 通过 `live2d/web.config` 注册 MIME；`web.config` 含分层缓存和安全头。

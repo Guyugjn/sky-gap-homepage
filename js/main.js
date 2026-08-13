@@ -880,7 +880,6 @@
     var playlistEl = document.getElementById('music-playlist');
     var listInner = document.getElementById('playlist-inner');
     var listOpen = false;
-    var _outsideClickHandler = null; // 外部点击关闭
 
     // 播放列表渲染缓存 — 避免每次打开重建 DOM
     var _playlistRendered = false;
@@ -1023,6 +1022,7 @@
     }
 
     // 列表项索引 → scrollTop 居中定位（弹性动画）
+    // 移动端：瞬时跳转定位，避免 rAF 弹簧动画持续写 scrollTop 与原生触摸滚动冲突（导致列表无法滑动）
     function scrollToListIndex(index) {
       if (!listInner) return;
       var item = listInner.querySelector('.playlist-item[data-index="' + index + '"]');
@@ -1031,6 +1031,13 @@
       var target = item.offsetTop - (listInner.clientHeight - item.offsetHeight) / 2;
       if (target < 0) target = 0;
       if (target > maxS) target = maxS;
+      if (isTouchDevice) {
+        // 移动端：原生滚动接管，直接跳转定位
+        listInner.scrollTop = target;
+        scrollVel = 0;
+        scrollSpring = false;
+        return;
+      }
       scrollTarget = target;
       scrollVel = 0;
       scrollSpring = true;
@@ -1071,14 +1078,7 @@
       }
       // 移动端：完全交给原生滚动，不做任何拦截
 
-      _outsideClickHandler = function(e) {
-        if (!playlistEl || !listBtn) return;
-        if (playlistEl.contains(e.target) || listBtn.contains(e.target)) return;
-        closePlaylist();
-      };
-      setTimeout(function() {
-        if (listOpen) document.addEventListener('click', _outsideClickHandler);
-      }, 10);
+      // 列表只由按钮开关，不监听外部点击关闭
     }
 
     function closePlaylist() {
@@ -1097,12 +1097,6 @@
       // 移除事件
       if (listInner) {
         listInner.removeEventListener('wheel', onPlaylistWheel);
-      }
-
-      // 移除外部点击监听
-      if (_outsideClickHandler) {
-        document.removeEventListener('click', _outsideClickHandler);
-        _outsideClickHandler = null;
       }
     }
 
