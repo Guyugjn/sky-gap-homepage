@@ -1864,6 +1864,19 @@
     var revealEls = document.querySelectorAll('.reveal-up');
     if (!revealEls.length) return;
 
+    // 兜底：旧浏览器无 IntersectionObserver 时直接显示，不依赖 JS 监听
+    if (typeof IntersectionObserver === 'undefined') {
+      for (var r = 0; r < revealEls.length; r++) {
+        revealEls[r].style.opacity = '1';
+        revealEls[r].style.transform = 'translateY(0)';
+      }
+      return;
+    }
+
+    // 只有 JS 运行至此才加 js 标记：让 .reveal-up 从"默认可见"切换为"隐藏等 IO 入场"
+    // （若前面 initFortune/initStars 抛错，此处不执行，内容保持默认可见，不丢失）
+    document.documentElement.classList.add('js');
+
     // 从 class d0~d6 读取交错延迟（秒）
     var DELAY_MAP = [0, 0.12, 0.28, 0.44, 0.6, 0.78, 0.96];
     function getDelay(el) {

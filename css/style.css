@@ -1352,7 +1352,13 @@ body {
    ============================================ */
 
 .reveal-up {
-  /* 初始隐藏，JS IntersectionObserver 触发弹性入场 */
+  /* 默认可见：JS 未加载/加载失败时内容不丢失（健壮性兜底） */
+  opacity: 1;
+  transform: none;
+}
+
+/* JS 正常运行时：隐藏，等待 IntersectionObserver 弹性入场 */
+html.js .reveal-up {
   opacity: 0;
   transform: translateY(40px); /* 多 5px 行程给弹性更多空间 */
 }

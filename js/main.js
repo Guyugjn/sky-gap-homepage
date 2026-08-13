@@ -556,6 +556,10 @@
     // 读取上次保存的音量（localStorage），若无则用默认值
     var savedVol = parseFloat(localStorage.getItem('gy_volume'));
     var volume = (savedVol >= 0 && savedVol <= 1) ? savedVol : CONFIG.music.startVolume;
+    // 读取静音状态（localStorage）——静音态时 gy_volume 保存的是静音前的真实音量
+    var _isMuted = localStorage.getItem('gy_muted') === '1';
+    var _volumeBeforeMute = volume;
+    if (_isMuted) volume = 0; // 恢复静音态：当前音量归零，真实音量保留在 _volumeBeforeMute
     var started = false; // 是否已完成首次加载
 
     // === 创建 audio ===
@@ -1120,6 +1124,12 @@
     if (volumeBar) {
       createSlider(volumeBar, function (pct) {
         if (pct < 0) return;
+        if (_isMuted && pct > 0.005) {
+          // 拖动音量条即视为主动取消静音，同步标志位防止与音频实际状态脱节
+          _isMuted = false;
+          _volumeBeforeMute = pct;
+          try { localStorage.setItem('gy_muted', '0'); } catch (e) {}
+        }
         volume = pct;
         audio.volume = volume;
         updateVolumeUI(volume);
@@ -1143,26 +1153,39 @@
     }
 
     // 音量按钮：点击切换静音/恢复（用 isMuted 标志消除与滑块的同步问题）
-    var _isMuted = false;
-    var _volumeBeforeMute = volume;
     volumeBtn.addEventListener('click', function () {
       if (_isMuted) {
-        // 取消静音
+        // 取消静音 — 恢复到静音前的真实音量
         _isMuted = false;
         volume = _volumeBeforeMute || CONFIG.music.startVolume;
         audio.volume = volume;
         updateVolumeUI(volume);
-        try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
+        try {
+          localStorage.setItem('gy_volume', volume.toFixed(3));
+          localStorage.setItem('gy_muted', '0');
+        } catch (e) {}
       } else if (volume > 0.005) {
-        // 静音 — 保存当前音量（来自滑块的最新值）然后静音
+        // 静音 — 保存当前音量（滑块最新值）作为恢复音量，然后静音
         _isMuted = true;
         _volumeBeforeMute = volume;
         volume = 0;
         audio.volume = 0;
         updateVolumeUI(0);
-        try { localStorage.setItem('gy_volume', '0'); } catch (e) {}
+        try {
+          localStorage.setItem('gy_volume', _volumeBeforeMute.toFixed(3));
+          localStorage.setItem('gy_muted', '1');
+        } catch (e) {}
+      } else {
+        // 音量已为 0（刷新恢复的静音态或手动降到 0）——点击恢复上次音量
+        _isMuted = false;
+        volume = _volumeBeforeMute || CONFIG.music.startVolume;
+        audio.volume = volume;
+        updateVolumeUI(volume);
+        try {
+          localStorage.setItem('gy_volume', volume.toFixed(3));
+          localStorage.setItem('gy_muted', '0');
+        } catch (e) {}
       }
-      // volume 已为 0 时再点静音按钮无反应，避免状态混乱
     });
 
     // === 按钮事件 ===
@@ -1218,20 +1241,29 @@
           volume = Math.min(1, volume + 0.05);
           audio.volume = volume;
           updateVolumeUI(volume);
-          try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
+          try {
+            localStorage.setItem('gy_volume', volume.toFixed(3));
+            localStorage.setItem('gy_muted', '0');
+          } catch (e) {}
           break;
         case 'ArrowDown':
           e.preventDefault();
           volume = Math.max(0, volume - 0.05);
           audio.volume = volume;
           updateVolumeUI(volume);
-          if (volume <= 0.005) {
-            _isMuted = true;
-            _volumeBeforeMute = 0.05;
-          } else if (_isMuted) {
-            _isMuted = false;
-          }
-          try { localStorage.setItem('gy_volume', volume.toFixed(3)); } catch (e) {}
+          try {
+            if (volume <= 0.005) {
+              // 降到 0 = 静音，记录 0.05 作为一键恢复音量
+              _isMuted = true;
+              _volumeBeforeMute = 0.05;
+              localStorage.setItem('gy_volume', '0.050');
+              localStorage.setItem('gy_muted', '1');
+            } else {
+              if (_isMuted) _isMuted = false;
+              localStorage.setItem('gy_volume', volume.toFixed(3));
+              localStorage.setItem('gy_muted', '0');
+            }
+          } catch (e) {}
           break;
       }
     });

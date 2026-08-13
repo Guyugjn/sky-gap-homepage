@@ -46,7 +46,7 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 - 播放列表：事件委托 + DOM 缓存（首次渲染后仅更新高亮）；开关只由 ☰ 按钮控制，不监听外部点击关闭
 - 智能预加载：当前曲目缓冲充足后下载下一首
 - 播放列表滚动：桌面端滚轮动量滚动（参数见 `CONFIG.playlist`）+ 弹簧定位；移动端瞬时跳转定位（不启动 rAF 循环，避免与原生触摸滚动冲突）
-- 静音管理：`_isMuted` + `_volumeBeforeMute` 独立管理
+- 静音管理：`_isMuted` + `_volumeBeforeMute` 独立管理，静音态与恢复音量持久化（`gy_muted` + `gy_volume`）；拖动音量条/键盘调音量均需同步 `_isMuted`
 - 键盘快捷键：空格播放/暂停、左右切歌、上下调音量（输入框及 ARIA slider 控件中不触发）
 - 音频错误计数：连续失败达阈值后停止
 
@@ -85,7 +85,8 @@ SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3
 - **飞鱼 SVG**：默认朝左，`scaleX(-1)` = 朝右，`transform-origin: 42.1% 51.6%`。
 - **CSS 兼容**：避免 `:has()`，`backdrop-filter` 有 `@supports` 降级。
 - **Twemoji**：`.emoji` 类 `pointer-events: none`；动态 emoji 须手动 `twemoji.parse()`。
-- **静音管理**：键盘调音量时同步处理 `_isMuted` 状态，防止标志位与实际音量脱节。
+- **滚动浮现兜底**：`.reveal-up` 默认可见，仅当 `initScrollBehavior` 正常注册 IntersectionObserver 时才给 `<html>` 加 `js` 类切换为隐藏（`html.js .reveal-up`）；无 IO 的旧浏览器直接显示。保持"内容默认可见、JS 参与后才隐藏"的依赖方向，防止脚本异常时标题/副标题永久不可见。
+- **静音管理**：键盘调音量、拖动音量条均需同步 `_isMuted` 状态并持久化（`gy_muted`），防止标志位与实际音量脱节；静音时 `gy_volume` 保存的是静音前的真实音量。
 - **播放列表移动端滚动**：`scrollToListIndex` 在触屏设备直接赋值 `scrollTop`（瞬时跳转）并 return，禁止启动 rAF 弹簧循环——否则持续写 scrollTop 会与原生触摸滚动打架，列表会拖不动。
 - **键盘守卫排除**：`INPUT`、`TEXTAREA`、`role="slider"` 元素中键盘快捷键不触发，保留原生功能。
 - **IIS**：`.moc`/`.mtn` 通过 `live2d/web.config` 注册 MIME；`web.config` 含分层缓存和安全头。
