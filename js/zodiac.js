@@ -1322,6 +1322,7 @@
     /** 从星环双星对齐位（6 点方向）射向对应星座中心的光束（手机端不生成） */
     function spawnStarBeam(constIndex, gold) {
       if (window.innerWidth <= 768) return; // 手机端无引导光束
+      if (!_canvasVisible) return; // 白天模式无星空背景：不生成光束（避免 starBeams 只增不减）
       if (constIndex < 0 || constIndex >= CONSTELLATIONS.length) return;
       var nodes = [];
       for (var i = 0; i < cNodes.length; i++) {
@@ -1815,8 +1816,18 @@
 
     // ---- 主循环（注册到全局 rAF 调度） ----
 
+    // 视口门控：section 滚出视口时暂停星空绘制（画布铺在 section 内，不可见时绘制是纯浪费）。
+    // 庆祝粒子不受门控——确认瞬间必在视口内，粒子持续期间若滚走也仅短暂多画几帧
+    var _sectionInView = true;
+    if (typeof IntersectionObserver !== 'undefined') {
+      new IntersectionObserver(function (entries) {
+        _sectionInView = entries[0].isIntersecting;
+      }).observe(section);
+    }
+
     function tick(ts) {
       if (W <= 0 || H <= 0) return;
+      if (!_sectionInView && celebrateParticles.length === 0) return;
       if (!_canvasVisible && celebrateParticles.length === 0) return;
       lerpTheme();
       update(ts);
@@ -1824,7 +1835,8 @@
     }
 
     function resize() {
-      var dpr = window.devicePixelRatio || 1;
+      // DPR 上限 2：3x 屏用 2x，填充率降 2.25 倍（星星为 1px 级小点，2x 下视觉几乎无差）
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = section.offsetWidth;
       H = section.offsetHeight;
       canvas.width = W * dpr;

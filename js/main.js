@@ -218,6 +218,9 @@
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('mouseup', onUp);
     document.addEventListener('touchend', onUp);
+    // 触摸被系统取消（如滚动接管/来电）时也必须复位 dragging，
+    // 否则持续 preventDefault 所有 touchmove 会卡死整页（含播放列表）的滚动
+    document.addEventListener('touchcancel', onUp);
 
     return {
       destroy: function () {
@@ -227,6 +230,7 @@
         document.removeEventListener('touchmove', onMove);
         document.removeEventListener('mouseup', onUp);
         document.removeEventListener('touchend', onUp);
+        document.removeEventListener('touchcancel', onUp);
       }
     };
   }
@@ -252,22 +256,44 @@
       particles = createParticles();
     });
 
+    // 预烘焙粒子光晕 sprite — 每粒子创建一次，运行时 drawImage 替代每帧 shadowBlur 高斯模糊
+    // 视觉等价：原效果为 fill alpha + 光晕 shadow alpha×0.6，烘焙 sprite 后经 globalAlpha 统一缩放，合成逐像素一致
+    function makeSprite(r, color) {
+      // 光晕影响半径 ≈ r + shadowBlur(r×5)，取 10r 覆盖完整光晕（外圈几乎不可见，裁剪无视觉差）
+      var size = Math.max(8, Math.ceil(r * 20));
+      var sc = document.createElement('canvas');
+      sc.width = size;
+      sc.height = size;
+      var g = sc.getContext('2d');
+      var half = size / 2;
+      g.shadowBlur = r * 5;
+      g.shadowColor = 'rgba(' + color + ', 0.6)';
+      g.beginPath();
+      g.arc(half, half, r, 0, Math.PI * 2);
+      g.fillStyle = 'rgba(' + color + ', 1)';
+      g.fill();
+      return { canvas: sc, half: half };
+    }
+
     // 创建一个粒子
     function createParticle() {
       const colors = CONFIG.particles.colors;
+      var r = CONFIG.particles.minSize + Math.random() * (CONFIG.particles.maxSize - CONFIG.particles.minSize);
+      var color = colors[Math.floor(Math.random() * colors.length)];
       return {
         x: Math.random() * w,
         y: Math.random() * h,
-        r: CONFIG.particles.minSize + Math.random() * (CONFIG.particles.maxSize - CONFIG.particles.minSize),
+        r: r,
         speed: CONFIG.particles.minSpeed + Math.random() * (CONFIG.particles.maxSpeed - CONFIG.particles.minSpeed),
         opacity: CONFIG.particles.minOpacity + Math.random() * (CONFIG.particles.maxOpacity - CONFIG.particles.minOpacity),
-        color: colors[Math.floor(Math.random() * colors.length)],
+        color: color,
         // 水平漂移
         drift: (Math.random() - 0.5) * 0.3,
         // 闪烁相位
         phase: Math.random() * Math.PI * 2,
         // 闪烁速度
         flickerSpeed: 0.005 + Math.random() * 0.02,
+        sprite: makeSprite(r, color),
       };
     }
 
@@ -286,7 +312,6 @@
     function draw(time) {
       ctx.clearRect(0, 0, w, h);
 
-      ctx.save();
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
 
@@ -308,15 +333,11 @@
         const flicker = Math.sin(time * p.flickerSpeed + p.phase) * 0.3 + 0.7;
         const alpha = p.opacity * flicker;
 
-        // 绘制发光粒子 — 用 shadowBlur 替代 createRadialGradient，减少 GC 压力
-        ctx.shadowBlur = p.r * 5;
-        ctx.shadowColor = `rgba(${p.color}, ${alpha * 0.6})`;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${p.color}, ${alpha})`;
-        ctx.fill();
+        // 绘制预烘焙光晕 sprite（替代每帧 shadowBlur 高斯模糊，视觉等价）
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(p.sprite.canvas, p.x - p.sprite.half, p.y - p.sprite.half);
       }
-      ctx.restore();
+      ctx.globalAlpha = 1;
     }
 
     particles = createParticles();
@@ -906,6 +927,7 @@
       if (!totalTracks) {
         if (!_playlistRendered) {
           listInner.innerHTML = '<span class="playlist-empty">🎵 歌单为空，请添加音乐文件</span>';
+          if (window.twemoji) window.twemoji.parse(listInner);
           _playlistRendered = true;
         }
         return;
@@ -959,7 +981,9 @@
         }
       }
 
-      if (started) scrollToListIndex(currentIndex);
+      // 移动端打开列表不做定位跳转：列表刚展开由原生滚动接管（从顶部开始即可），
+      // 避免折叠态/过渡期写 scrollTop 导致 iOS 列表卡死；切歌/点选时列表已打开会另行定位
+      if (started && !isTouchDevice) scrollToListIndex(currentIndex);
     }
 
     // === 动量滚动系统 ===
@@ -1071,10 +1095,12 @@
 
     function openPlaylist() {
       if (!playlistEl || !listInner) return;
-      renderPlaylist();
+      // 先展开面板再渲染定位：避免折叠态（max-height:0）下写 scrollTop，
+      // iOS 对裁剪容器写 scrollTop 会破坏原生滚动（播放后 started=true 触发定位时列表卡死）
       playlistEl.classList.add('open');
       listBtn && listBtn.classList.add('open');
       listOpen = true;
+      renderPlaylist();
 
       // 桌面端：启用自定义动量滚动
       if (!isTouchDevice) {

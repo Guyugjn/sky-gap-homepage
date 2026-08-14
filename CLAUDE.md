@@ -18,75 +18,57 @@ js/zodiac.js            — 星座运势、塔罗日历、星环日轨、星空 
 generate_playlist.py    — 扫描 assets/music/ 生成 playlist.js
 live2d/                 — 看板娘（autoload.js + SDK + 双模型）
 assets/                 — 头像、favicon、Twemoji 库、字体、音乐
-web.config              — IIS 缓存策略（分层缓存）+ 安全头 + 压缩
-live2d/web.config       — 注册 .moc/.mtn MIME 映射
+web.config              — IIS 缓存策略 + 安全头 + 压缩；live2d/web.config 注册 .moc/.mtn MIME
 ```
 
 ## 核心架构
 
 ### 全局 rAF 调度（`main.js` `_globalLoop`）
 
-所有动画子系统通过 `window._registerTick` 注册到统一 `requestAnimationFrame` 循环，共享 `_pageVisible` 控制启停。注册者：光粒子、飞鱼、星空。
+所有动画子系统通过 `window._registerTick` 注册到统一 rAF 循环，共享 `_pageVisible` 控制启停。注册者：光粒子、飞鱼、星空。**禁止独立 rAF 循环**。
+
+### 光粒子（`main.js` `initParticles`）
+
+全屏发光粒子。性能：光晕初始化时预烘焙为离屏 sprite（`makeSprite`），运行时 `drawImage` + `globalAlpha` 闪烁，替代每帧 `shadowBlur`——视觉逐像素等价（fill α 与光晕 α×0.6 由 globalAlpha 统一缩放）。改绘制方式时须保持等价。
 
 ### 飞鱼自主飞行（`main.js` `initParallax`）
 
-SVG 飞鱼（`#cursor-fish`）三种模式，位置通过 `transform: translate3d()` 驱动（Compositor-only）：
-
-- **漫游**：从左向右正弦波起伏
-- **追逐**：鼠标活跃时被光标吸引
-- **受惊逃跑**：点击鱼附近则反向弹飞后恢复
-
-关键：`transform-origin: 42.1% 51.6%`；瞳孔追踪低通滤波（30% 帧插值）。
+SVG 飞鱼三种模式（漫游/追逐光标/受惊逃跑），`transform: translate3d()` 驱动（Compositor-only）。关键：`transform-origin: 42.1% 51.6%`；瞳孔追踪低通滤波（30% 帧插值）。
 
 ### 音乐播放器（`main.js` `initMusic`）
 
-四行卡片式 UI（曲名 → 控制 → 进度条 → 列表/模式/音量）。核心设计：
+四行卡片 UI（曲名 → 控制 → 进度条 → 列表/模式/音量）。核心设计：
 
-- 进度条/音量条通过 `createSlider` 工厂统一处理拖拽（`mousedown`/`touchstart`）
-- 播放列表：事件委托 + DOM 缓存（首次渲染后仅更新高亮）；开关只由 ☰ 按钮控制，不监听外部点击关闭
-- 智能预加载：当前曲目缓冲充足后下载下一首
-- 播放列表滚动：桌面端滚轮动量滚动（参数见 `CONFIG.playlist`）+ 弹簧定位；移动端瞬时跳转定位（不启动 rAF 循环，避免与原生触摸滚动冲突）
-- 静音管理：`_isMuted` + `_volumeBeforeMute` 独立管理，静音态与恢复音量持久化（`gy_muted` + `gy_volume`）；拖动音量条/键盘调音量均需同步 `_isMuted`
-- 键盘快捷键：空格播放/暂停、左右切歌、上下调音量（输入框及 ARIA slider 控件中不触发）
-- 音频错误计数：连续失败达阈值后停止
+- `createSlider` 工厂统一处理进度条/音量条拖拽
+- 播放列表：事件委托 + DOM 缓存（首次渲染后仅更新高亮）；开关只由 ☰ 按钮控制
+- 智能预加载下一首；音频错误达阈值停止
+- 静音：`_isMuted` + `_volumeBeforeMute` 独立管理，静音态与恢复音量持久化（`gy_muted` + `gy_volume`），拖动音量条/键盘调音量均需同步 `_isMuted`
+- 键盘快捷键：空格播放/暂停、左右切歌、上下调音量（INPUT/TEXTAREA 及 `role="slider"` 内不触发）
+- 播放列表滚动陷阱见「重要注意事项」
 
 ### 星座星空模块（`zodiac.js`）
 
-页面布局：hero（100vh）→ 星座区域（全屏，Canvas 透明底与页面同色）→ 页脚。
+布局：hero（100vh）→ 星座区（Canvas 透明底与页面同色）→ 页脚。启动顺序：`initFortune` → `initStars` → 按模式调 `initTarot`/`initOrbit` → `initScrollBehavior`。
 
-启动顺序：`initFortune()` → `initStars()` → 按模式调 `initTarot`/`initOrbit` → `initScrollBehavior()`.
-
-1. **运势**（`initFortune`）：API 查询今日/周/月/年运势。`AbortController` 竞态保护。移动端始终展开。
-
-2. **白天模式：塔罗符卡 + 星丸日期**（`initTarot`）：上排 12 星座符卡（grid-6，毛玻璃），下排 31 星丸（flex-wrap）。选月触发 `syncDayDim` 超天数置灰。确认后结果展示，12s 复位。
-
-3. **夜间模式：星环日轨**（`initOrbit`）：SVG 双环自转（rAF 直接驱动 `style.transform`，Compositor-only）。内圈日期节点增量更新（复用 + 隐藏多余），`transform-origin: 300px 300px` 绝对坐标固定旋转中心。点星 → 光束 → 涟漪 → 确认金色爆发 → 结果面板。Canvas 3 级发光（`glowSmooth` 插值）。重新选择时星座连线反向描画退场（`_glowDismiss`），节点/四芒/面板同步 CSS 退场动画，500ms 后 DOM 复位。
-
-4. **星空 Canvas**（`initStars`）：200 自由粒子（移动端 100），12 星座锚点。`_canvasVisible` 控制渲染启停——白天仅在有庆祝粒子时临时激活（仅渲染粒子）。手机端（≤768px）跳过星座节点/连线/光束，仅保留自由粒子、庆祝粒子、流星。流星仅在夜间生成。
-
-5. **庆祝烟花**（`spawnCelebrate`）：60 金色粒子 + 350ms 后 35 次级火星，带重力/拖尾/闪烁。爆发源：夜间桌面 → 星座中心；手机夜间 → 星环中心；白天（桌面/手机）→ 确认按钮上方 30px。
+1. **运势**：API 查询今/周/月/年运势，`AbortController` 竞态保护，移动端始终展开。
+2. **白天塔罗符卡 + 星丸**：12 符卡（grid-6，毛玻璃）+ 31 星丸。符卡符号与 `MONTH_TO_SIGNS` 对齐（每月取"该月起始星座"，如 1月=水瓶 ♒）。选月 `syncDayDim` 超天数置灰。确认后展示，12s 复位。
+3. **夜间星环日轨**：SVG 双环自转（rAF 驱动 transform，Compositor-only），内圈日期节点复用 + 隐藏多余。点星 → 光束 → 涟漪 → 确认金色爆发 → 结果面板。Canvas 3 级发光（`glowSmooth` 插值）。重新选择时连线反向退场（`_glowDismiss`），500ms 后 DOM 复位。
+4. **星空 Canvas**：200 粒子（移动端 100），`_canvasVisible` 控制启停（白天仅庆祝粒子时临时激活）；流星仅夜间生成。手机端跳过星座节点/连线/光束。性能：DPR 上限 2；`_sectionInView` 视口门控（section 滚出视口暂停绘制，庆祝粒子不受门控）。
+5. **庆祝烟花**：60 + 35 粒子，带重力/拖尾/闪烁。爆发源：夜间桌面 → 星座中心；手机夜间 → 星环中心；白天 → 确认按钮上方 30px。
 
 ## 移动端适配
 
-断点：768px（Live2D 隐藏、云层视差跳过、飞鱼禁能、星环缩小、星空降级）、640px（播放器缩小）、480px（符卡 6→4 列）、400px（播放器再缩 + 音量条换行）。`@media (hover: none)` 清除触屏 hover 残留。
-
-安全区域：`viewport-fit=cover`，`min-height: 100dvh`，`env(safe-area-inset-bottom)`。
+断点：768px（Live2D 隐藏、云层视差跳过、飞鱼禁能、星环缩小、星空降级）、640px（播放器缩小）、480px（符卡 6→4 列）、400px（播放器再缩 + 音量条换行）。安全区：`viewport-fit=cover`、`min-height: 100dvh`、`env(safe-area-inset-bottom)`。
 
 ## 重要注意事项
 
-- **全局 rAF 禁止独立循环**：必须通过 `window._registerTick` 注册。
-- **CONSTELLATIONS 与 ZODIAC 同序**：均为黄道顺序（白羊 0 → 双鱼 11），`findConstellationIndex` 按中文名映射。
+- **CONSTELLATIONS 与 ZODIAC 同序**：黄道顺序（白羊 0 → 双鱼 11），`findConstellationIndex` 按中文名映射。
 - **结果面板 id 不同**：白天 `#orbit-result`（static），夜间 `#orbit-result-ring`（absolute）。
 - **日期星丸 class**：选中 `active`，确认 `matched`，超月天数 `dimmed`。
-- **确认按钮强制回流**：`display:none` 切换后需 `animation='none'` → `void offsetHeight` → `animation=''` 三段式确保 WebKit 重启动画。
-- **确认按钮只绑定 `click`**：不绑 `touchend`，防移动端双重触发。
-- **主题切换清理**：`_clearCanvasEffects` 清除庆祝粒子/光束/流星/连线状态及 `_glowDismiss` 退场标记。
-- **星空颜色变量**：CSS 变量驱动，`lerpTheme` 插值渐变。
-- **飞鱼 SVG**：默认朝左，`scaleX(-1)` = 朝右，`transform-origin: 42.1% 51.6%`。
-- **CSS 兼容**：避免 `:has()`，`backdrop-filter` 有 `@supports` 降级。
+- **确认按钮**：`display:none` 切换后需 `animation='none'` → `void offsetHeight` → `animation=''` 强制回流重启动画；只绑 `click`，防移动端双重触发。
+- **主题切换清理**：`_clearCanvasEffects` 清庆祝粒子/光束/流星/连线状态及 `_glowDismiss`。
+- **星空颜色**：CSS 变量驱动，`lerpTheme` 插值渐变。
+- **CSS 兼容**：避免 `:has()`；`backdrop-filter` 有 `@supports` 降级。
 - **Twemoji**：`.emoji` 类 `pointer-events: none`；动态 emoji 须手动 `twemoji.parse()`。
-- **滚动浮现兜底**：`.reveal-up` 默认可见，仅当 `initScrollBehavior` 正常注册 IntersectionObserver 时才给 `<html>` 加 `js` 类切换为隐藏（`html.js .reveal-up`）；无 IO 的旧浏览器直接显示。保持"内容默认可见、JS 参与后才隐藏"的依赖方向，防止脚本异常时标题/副标题永久不可见。
-- **静音管理**：键盘调音量、拖动音量条均需同步 `_isMuted` 状态并持久化（`gy_muted`），防止标志位与实际音量脱节；静音时 `gy_volume` 保存的是静音前的真实音量。
-- **播放列表移动端滚动**：`scrollToListIndex` 在触屏设备直接赋值 `scrollTop`（瞬时跳转）并 return，禁止启动 rAF 弹簧循环——否则持续写 scrollTop 会与原生触摸滚动打架，列表会拖不动。
-- **键盘守卫排除**：`INPUT`、`TEXTAREA`、`role="slider"` 元素中键盘快捷键不触发，保留原生功能。
-- **IIS**：`.moc`/`.mtn` 通过 `live2d/web.config` 注册 MIME；`web.config` 含分层缓存和安全头。
+- **滚动浮现兜底**：`.reveal-up` 默认可见，仅当 `initScrollBehavior` 正常注册 IO 时才给 `<html>` 加 `js` 类隐藏（`html.js .reveal-up`）。保持"内容默认可见、JS 参与后才隐藏"的依赖方向，防止脚本异常时标题永久不可见。
+- **播放列表移动端滚动**：`scrollToListIndex` 在触屏直接赋值 `scrollTop` 并 return，禁止 rAF 弹簧循环（否则持续写 scrollTop 会与原生触摸滚动打架，列表拖不动）。打开列表时移动端不做定位跳转；`openPlaylist` 必须先加 `.open` 再渲染——折叠态（max-height:0）写 scrollTop 在 iOS 会破坏原生滚动导致列表卡死。`createSlider` 须绑 `touchcancel` 复位 `dragging`，防系统取消触摸后 preventDefault 卡死整页滚动。
