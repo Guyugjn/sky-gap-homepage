@@ -3,12 +3,14 @@
  * https://github.com/stevenjoezhang/live2d-widget
  *
  * 策略：
- * - waifu-tips.js → CDN（ES 模块，HTTPS 无 CORS 问题）
+ * - waifu-tips.js（含其依赖 chunk/index.js、chunk/index2.js）→ 本地 live2d/ 目录，
+ *   相对路径解析，与 SDK/model 同源（只有"小行星"小游戏按钮仍按需从 CDN 加载）
  * - waifu-tips.json → 内联 Blob URL（避免 fetch 本地 JSON 失败）
  * - live2d.min.js / waifu.css → 本地
  * - 模型文件：
  *   · file:// 协议 → CDN（Chrome 禁止 file:// 下的 fetch，CDN 有 CORS 头）
  *   · HTTP 服务器  → 本地（同源请求，无 CORS 问题）
+ * - file:// 协议下 waifu-tips.js 的 ES module import 被浏览器 CORS 拦 → 回退 CDN
  */
 
 const live2d_path = 'live2d/';
@@ -251,7 +253,8 @@ function loadExternalResource(url, type) {
       try {
         await Promise.all([
           loadExternalResource(live2d_path + 'waifu.css', 'css'),
-          loadExternalResource(cdn_js + 'waifu-tips.js', 'js')
+          // file:// 下 ES module 的 chunk import 被 CORS 拦 → 回退 CDN；HTTP 走本地
+          loadExternalResource(isFileProtocol ? cdn_js + 'waifu-tips.js' : live2d_path + 'waifu-tips.js', 'js')
         ]);
 
         initWidget({

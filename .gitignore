@@ -2,7 +2,9 @@
 assets/music/*
 !assets/music/playlist.js
 
-# Twemoji 本地备用图片（15MB，CDN 已足够）
+# Twemoji 本地图标（4MB）：生产经 307 落到 HTTP（非安全上下文），
+# index.html 按 isSecure 分流后 twemoji base 就是本地目录——这是主源，不是 CDN 备用，删除会碎图。
+# git 仓库不存（保持轻量），但部署到服务器的文件必须包含此目录。
 assets/twemoji-72x72/
 
 # Python 字节码缓存
@@ -22,7 +24,7 @@ desktop.ini
 *.swo
 *~
 
-# SEO 文件（仅本地）
+# SEO 文件（不进 git；部署时随站上传，robots.txt 引用的 sitemap 为生产域名）
 robots.txt
 sitemap.xml
 
@@ -34,5 +36,5 @@ docs_gathered/
 # 优化清单
 优化清单.md
 
-# 构建输出
+# 构建输出（release/ 保留为部署打包目录，勿删）
 release/

@@ -12,8 +12,13 @@
   <meta property="og:title" content="孤鱼GY · 天空之隙">
   <meta property="og:description" content="一条在天空之隙中游弋的飞鱼 — 探索星座运势、聆听音乐、与看板娘互动。">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="http://www.080322.xyz">
-  <meta property="og:image" content="http://www.080322.xyz/assets/avatar.jpg">
+  <meta property="og:url" content="https://www.080322.xyz">
+  <meta property="og:image" content="https://www.080322.xyz/assets/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="孤鱼GY · 天空之隙 — 一只飞鱼游弋在星空与云海之间">
+  <!-- 规范页指向：域名层 307 到源站 IP，canonical 让搜索引擎归属域名 URL -->
+  <link rel="canonical" href="https://www.080322.xyz/">
   <!-- JSON-LD 结构化数据（SEO 富摘要） -->
   <script type="application/ld+json">
   {
@@ -21,8 +26,8 @@
     "@type": "Person",
     "name": "孤鱼GY",
     "alternateName": "guyuGY",
-    "url": "http://www.080322.xyz",
-    "image": "http://www.080322.xyz/assets/avatar.jpg",
+    "url": "https://www.080322.xyz",
+    "image": "https://www.080322.xyz/assets/avatar.jpg",
     "description": "一条在天空之隙中游弋的飞鱼 — 探索星座运势、聆听音乐。",
     "sameAs": [
       "https://github.com/Guyugjn/sky-gap-homepage",
@@ -35,22 +40,26 @@
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": "孤鱼GY · 天空之隙",
-    "url": "http://www.080322.xyz",
+    "url": "https://www.080322.xyz",
     "description": "孤鱼GY的个人主页 — 星座运势、音乐播放、互动看板娘"
   }
   </script>
   <meta property="og:site_name" content="孤鱼GY · 天空之隙">
   <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="孤鱼GY · 天空之隙">
   <meta name="twitter:description" content="一条在天空之隙中游弋的飞鱼。">
-  <meta name="twitter:image" content="http://www.080322.xyz/assets/avatar.jpg">
+  <meta name="twitter:image" content="https://www.080322.xyz/assets/og-image.jpg">
   <meta name="theme-color" content="#B0D2E7" id="theme-color-meta">
   <link rel="icon" href="assets/favicon.svg">
-  <!-- Ma Shan Zheng 马山正体 — 本地托管，不依赖 Google Fonts -->
+  <!-- iOS 主屏图标 -->
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <!-- Ma Shan Zheng 马山正体 — 本地托管（unicode-range 分片：浏览器只下载用到的汉字分片，不依赖 Google Fonts） -->
   <link rel="stylesheet" href="assets/fonts/ma-shan-zheng.css">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://v2.xxapi.cn">
   <link rel="preload" href="assets/fonts/ma-shan-zheng.css" as="style">
+  <!-- 头像提前下载（首屏关键图） -->
   <link rel="preload" href="assets/avatar.jpg" as="image">
   <link rel="stylesheet" href="css/style.css">
   <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
@@ -213,7 +222,7 @@
     <div class="music-player" id="music-player">
       <!-- 第一行：曲名 + 列表按钮 -->
       <div class="music-label-wrap">
-        <span class="music-label" id="music-label">来放一首音乐吧 🎵</span>
+        <button type="button" class="music-label" id="music-label">来放一首音乐吧 🎵</button>
         <span class="social-tip" id="music-tip">点击复制曲名</span>
       </div>
 
@@ -277,95 +286,22 @@
       </div>
       <p class="zodiac-subtitle reveal-up d1">在星空间，聆听宇宙的低语</p>
 
-      <!-- 白天模式：塔罗符卡日期选择（上排月符卡 + 下排日符卡） -->
+      <!-- 星轨滑星：统一的生日选择器（白天/夜间共用，皮肤随主题切换） -->
       <div class="tarot-deck" id="tarot-deck">
-        <!-- 星座选择区：12 张塔罗牌卡，grid-cols-6 两行 -->
-        <div class="tarot-zodiac-grid" id="tarot-months">
-          <button class="tarot-card" data-month="1"><span class="tarot-glyph">♒</span><span class="tarot-label">1月</span></button>
-          <button class="tarot-card" data-month="2"><span class="tarot-glyph">♓</span><span class="tarot-label">2月</span></button>
-          <button class="tarot-card" data-month="3"><span class="tarot-glyph">♈</span><span class="tarot-label">3月</span></button>
-          <button class="tarot-card" data-month="4"><span class="tarot-glyph">♉</span><span class="tarot-label">4月</span></button>
-          <button class="tarot-card" data-month="5"><span class="tarot-glyph">♊</span><span class="tarot-label">5月</span></button>
-          <button class="tarot-card" data-month="6"><span class="tarot-glyph">♋</span><span class="tarot-label">6月</span></button>
-          <button class="tarot-card" data-month="7"><span class="tarot-glyph">♌</span><span class="tarot-label">7月</span></button>
-          <button class="tarot-card" data-month="8"><span class="tarot-glyph">♍</span><span class="tarot-label">8月</span></button>
-          <button class="tarot-card" data-month="9"><span class="tarot-glyph">♎</span><span class="tarot-label">9月</span></button>
-          <button class="tarot-card" data-month="10"><span class="tarot-glyph">♏</span><span class="tarot-label">10月</span></button>
-          <button class="tarot-card" data-month="11"><span class="tarot-glyph">♐</span><span class="tarot-label">11月</span></button>
-          <button class="tarot-card" data-month="12"><span class="tarot-glyph">♑</span><span class="tarot-label">12月</span></button>
+        <!-- 双弧星轨：外弧滑选日期 + 内弧滑选月份，星核沿弧滑动选生日（JS 生成） -->
+        <div class="star-trail" id="star-trail">
+          <svg class="star-trail-svg" id="star-trail-svg" viewBox="0 0 640 344" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
-        <!-- 日期选择：漂浮星丸网格（非日历式布局） -->
-        <div class="day-picker" id="day-picker">
-          <div class="day-grid" id="day-grid">
-            <!-- JS 根据选中月份动态生成日期星丸 -->
-          </div>
-        </div>
-        <!-- 中心确认区域 -->
+        <!-- 中心预览：星座 emoji + 实时提示 -->
         <div class="tarot-center" id="tarot-center">
           <span class="tarot-oracle" id="tarot-oracle"></span>
-          <span class="tarot-hint" id="tarot-hint">选月份符卡 · 再选日期星丸</span>
+          <span class="tarot-hint" id="tarot-hint">1月 · 沿外弧滑选日期</span>
         </div>
-        <button class="tarot-confirm" id="tarot-confirm" style="display:none;">确认选择</button>
-        <div class="orbit-result" id="orbit-result" style="display:none;"></div>
-      </div>
-
-      <!-- 夜间模式：星环日轨（仅夜间显示） -->
-      <div class="orbit-ring" id="orbit-ring" style="display:none;">
-        <svg class="orbit-svg" viewBox="0 0 600 600">
-          <defs>
-            <!-- 星体径向渐变：亮核 + 柔光晕（普通蓝星 / 选中亮星 / 确认金星） -->
-            <radialGradient id="orbit-star-blue">
-              <stop offset="0%" stop-color="#EAF5FF" stop-opacity="0.95"/>
-              <stop offset="28%" stop-color="#A8D4EE" stop-opacity="0.75"/>
-              <stop offset="60%" stop-color="#89C4E1" stop-opacity="0.28"/>
-              <stop offset="100%" stop-color="#89C4E1" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="orbit-star-lit">
-              <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
-              <stop offset="30%" stop-color="#D8ECFB" stop-opacity="0.9"/>
-              <stop offset="65%" stop-color="#A8D4EE" stop-opacity="0.38"/>
-              <stop offset="100%" stop-color="#A8D4EE" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="orbit-star-gold">
-              <stop offset="0%" stop-color="#FFF2D8" stop-opacity="1"/>
-              <stop offset="30%" stop-color="#F5D08C" stop-opacity="0.92"/>
-              <stop offset="65%" stop-color="#F0C060" stop-opacity="0.4"/>
-              <stop offset="100%" stop-color="#F0C060" stop-opacity="0"/>
-            </radialGradient>
-          </defs>
-          <!-- 外圈轨道（月份） -->
-          <circle class="orbit-track orbit-track--outer" cx="300" cy="300" r="240"/>
-          <g class="orbit-outer-group" id="orbit-outer-group">
-            <g class="orbit-outer-nodes" id="orbit-outer-nodes"></g>
-            <!-- 选中月星的四芒星光（JS 定位到选中星，随外圈同转） -->
-            <g class="orbit-spark-pos" id="orbit-spark-outer">
-              <g class="orbit-spark">
-                <line x1="-14" y1="0" x2="14" y2="0"/>
-                <line x1="0" y1="-14" x2="0" y2="14"/>
-              </g>
-            </g>
-          </g>
-          <!-- 内圈轨道（日期） -->
-          <circle class="orbit-track orbit-track--inner" cx="300" cy="300" r="140"/>
-          <g class="orbit-inner-group" id="orbit-inner-group">
-            <g class="orbit-inner-nodes" id="orbit-inner-nodes"></g>
-            <!-- 选中日星的四芒星光 -->
-            <g class="orbit-spark-pos" id="orbit-spark-inner">
-              <g class="orbit-spark">
-                <line x1="-10" y1="0" x2="10" y2="0"/>
-                <line x1="0" y1="-10" x2="0" y2="10"/>
-              </g>
-            </g>
-          </g>
-          <!-- 中心微光 -->
-          <circle class="orbit-core" cx="300" cy="300" r="3"/>
-        </svg>
-        <!-- 中心数字标注 — hover 预览 / 已选月日反馈 -->
-        <div class="orbit-center-label" id="orbit-center-label"></div>
-        <div class="orbit-hint" id="orbit-hint">外圈选月份 · 内圈选日期</div>
-        <button class="orbit-confirm" id="orbit-confirm" style="display:none;">确认星座</button>
-        <!-- 确认后的浮动结果 -->
-        <div class="orbit-result" id="orbit-result-ring" style="display:none;"></div>
+        <!-- 确认区 — 固定高度容器：按钮/结果面板切换不引起布局抖动 -->
+        <div class="tarot-actions" id="tarot-actions">
+          <button class="tarot-confirm" id="tarot-confirm" style="display:none;">确认选择</button>
+          <div class="orbit-result" id="orbit-result" style="display:none;"></div>
+        </div>
       </div>
 
       <div class="zodiac-grid">
@@ -376,12 +312,12 @@
               <div class="card-icon">🔮</div>
               <h3 class="card-title" id="fortune-title">白羊座 · 今日运势</h3>
             </div>
-            <!-- Tab 切换 -->
-            <div class="fortune-tabs">
-              <button class="fortune-tab active" data-time="today">今日</button>
-              <button class="fortune-tab" data-time="week">本周</button>
-              <button class="fortune-tab" data-time="month">本月</button>
-              <button class="fortune-tab" data-time="year">年度</button>
+            <!-- Tab 切换（aria-pressed 同步由 zodiac.js 维护） -->
+            <div class="fortune-tabs" role="group" aria-label="运势时间范围">
+              <button class="fortune-tab active" data-time="today" aria-pressed="true">今日</button>
+              <button class="fortune-tab" data-time="week" aria-pressed="false">本周</button>
+              <button class="fortune-tab" data-time="month" aria-pressed="false">本月</button>
+              <button class="fortune-tab" data-time="year" aria-pressed="false">年度</button>
             </div>
           </div>
           <!-- 运势指数 + 概述 — 横排 -->
@@ -418,9 +354,9 @@
             <summary>查看详细运势</summary>
             <div class="fortune-detail-text" id="fortune-detail-text"></div>
           </details>
-          <!-- 加载/错误提示 -->
-          <p class="fortune-loading" id="fortune-loading">加载中…</p>
-          <p class="fortune-error" id="fortune-error" style="display:none;">运势加载失败，请稍后重试</p>
+          <!-- 加载/错误提示（状态变化对读屏播报） -->
+          <p class="fortune-loading" id="fortune-loading" role="status">加载中…</p>
+          <p class="fortune-error" id="fortune-error" role="alert" style="display:none;">运势加载失败，请稍后重试 <button type="button" id="fortune-retry-btn" style="border:none;background:none;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;">重试</button></p>
         </div>
 
         </div>
@@ -437,8 +373,8 @@
     <p class="footer-visitor" id="footer-visitor"></p>
   </footer>
 
-  <!-- 复制提示气泡 -->
-  <div class="toast" id="toast">📋 邮箱已复制</div>
+  <!-- 复制提示气泡（aria-live：读屏播报） -->
+  <div class="toast" id="toast" role="status" aria-live="polite">📋 邮箱已复制</div>
 
   <script>
     /* Twemoji 加载完成后解析页面中所有 emoji
@@ -450,6 +386,14 @@
           ? 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@v17.0.3/assets/72x72'
           : 'assets/twemoji-72x72';
         twemoji.size = '';   /* base 已含 72x72，不走默认 size 避免路径重复 */
+        /* 星轨 SVG 内嵌 <img> 无法正常渲染——parse 前一刻把 SVG 移出 body，避免星座图标被替换 */
+        var trailSvg = document.getElementById('star-trail-svg');
+        var svgHolder = null;
+        if (trailSvg && trailSvg.parentNode) {
+          svgHolder = document.createElement('span');
+          trailSvg.parentNode.insertBefore(svgHolder, trailSvg);
+          trailSvg.remove();
+        }
         twemoji.parse(document.body, {
           className: 'emoji',
           onerror: function () {
@@ -469,6 +413,44 @@
             }
           }
         });
+        if (trailSvg && svgHolder) svgHolder.parentNode.insertBefore(trailSvg, svgHolder);
+        /* 星轨宫符标签还原：twemoji 会把 SVG <text> 中的宫符替换成 <img>，
+           SVG 内嵌 img 无法正常渲染（大小失控/消失）。parse 与星轨初始化
+           时序不定，用 MutationObserver 覆盖任意时刻的注入，再以短轮询兜底 */
+        var GLYPH = { '白羊座': '♈', '金牛座': '♉', '双子座': '♊', '巨蟹座': '♋', '狮子座': '♌', '处女座': '♍', '天秤座': '♎', '天蝎座': '♏', '射手座': '♐', '摩羯座': '♑', '水瓶座': '♒', '双鱼座': '♓' };
+        var restoreLabelImg = function (im) {
+          var parent = im.parentNode;
+          if (!parent) return;
+          var sign = parent.dataset ? parent.dataset.sign : '';
+          parent.replaceChild(document.createTextNode(GLYPH[sign] || ''), im);
+        };
+        var scanTrailLabels = function () {
+          var imgs = document.querySelectorAll('.trail-sign-label img.emoji');
+          for (var i = 0; i < imgs.length; i++) restoreLabelImg(imgs[i]);
+        };
+        var restoreAttempt = 0;
+        var poll = function () {
+          scanTrailLabels();
+          if (restoreAttempt < 10) { restoreAttempt++; setTimeout(poll, 150 * restoreAttempt); }
+        };
+        poll();
+        if (typeof MutationObserver !== 'undefined') {
+          new MutationObserver(function (muts) {
+            for (var i = 0; i < muts.length; i++) {
+              var nodes = muts[i].addedNodes;
+              for (var j = 0; j < nodes.length; j++) {
+                var n = nodes[j];
+                if (n.nodeType !== 1) continue;
+                if (n.classList && n.classList.contains('emoji') && n.closest && n.closest('.trail-sign-label')) {
+                  restoreLabelImg(n);
+                } else if (n.querySelectorAll) {
+                  var inner = n.querySelectorAll('.trail-sign-label img.emoji');
+                  for (var k = 0; k < inner.length; k++) restoreLabelImg(inner[k]);
+                }
+              }
+            }
+          }).observe(document.documentElement, { childList: true, subtree: true });
+        }
       } else {
         setTimeout(check, 50);
       }

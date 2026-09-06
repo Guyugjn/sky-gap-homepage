@@ -14,6 +14,8 @@
       startVolume: 0.20,       // 初始音量
       fadeInMs: 2000,          // 淡入时长（毫秒）
       errorMaxCount: 3,        // 连续错误最大次数
+      seekStep: 5,             // 键盘快进/快退步进（秒），左右方向键
+      seekStepFast: 10,        // 键盘大步进（秒），上下方向键
     },
     particles: {
       count: 55,               // 粒子数量
@@ -56,6 +58,10 @@
   // ==================== 设备检测 ====================
   var isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
 
+  // 移动断点统一判定 — 实时查询 matchMedia，避免各处快照不一致
+  var _mobileMQ = window.matchMedia('(max-width: 768px)');
+  function isMobileViewport() { return _mobileMQ.matches; }
+
   // ==================== 共享工具 ====================
 
   /** ease-out cubic 缓动函数，用于音量淡入淡出等非 CSS 动画 */
@@ -83,7 +89,12 @@
   function _globalLoop(ts) {
     if (_pageVisible) {
       for (var _ti = 0; _ti < _tickers.length; _ti++) {
-        _tickers[_ti](ts);
+        // 单个子系统异常不得冻结整站动画循环
+        try {
+          _tickers[_ti](ts);
+        } catch (_err) {
+          console.error('[ticker #' + _ti + ']', _err);
+        }
       }
     }
     requestAnimationFrame(_globalLoop);
@@ -186,7 +197,7 @@
 
   // ==================== 通用滑块工厂（重构进度条和音量条的拖拽逻辑） ====================
 
-  function createSlider(container, onChange) {
+  function createSlider(container, onChange, onKey) {
     var dragging = false;
 
     function getPct(e) {
@@ -212,8 +223,17 @@
       if (dragging) { dragging = false; onChange(-1, false); }
     }
 
+    // 键盘操作：role="slider" 承诺可键盘调节（±步进 / Home 首 / End 尾）
+    function onKeyDown(e) {
+      if (!onKey) return;
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].indexOf(e.key) === -1) return;
+      e.preventDefault();
+      onKey(e.key);
+    }
+
     container.addEventListener('mousedown', onDown);
     container.addEventListener('touchstart', onDown, { passive: false });
+    container.addEventListener('keydown', onKeyDown);
     document.addEventListener('mousemove', onMove);
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('mouseup', onUp);
@@ -226,6 +246,7 @@
       destroy: function () {
         container.removeEventListener('mousedown', onDown);
         container.removeEventListener('touchstart', onDown);
+        container.removeEventListener('keydown', onKeyDown);
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('touchmove', onMove);
         document.removeEventListener('mouseup', onUp);
@@ -245,15 +266,27 @@
     let w, h;
 
     function resize() {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
+      // DPR 缩放：canvas 物理像素 = CSS 像素 × devicePixelRatio，高分屏不再模糊
+      // 上限 2（与星空 canvas 一致）：3x 屏用 2x，粒子为小光点，视觉无差，省 2.25 倍填充率
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      // 绘制坐标仍使用 CSS 像素，统一坐标空间
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     resize();
+    // 防抖：窗口拖拽会连续触发 resize（每秒数十次），200ms 内合并为一次重建
+    var _particleResizeTimer = null;
     window.addEventListener('resize', () => {
-      resize();
-      // 重新生成粒子以适应新尺寸
-      particles = createParticles();
+      clearTimeout(_particleResizeTimer);
+      _particleResizeTimer = setTimeout(function () {
+        resize();
+        // 重新生成粒子以适应新尺寸
+        particles = createParticles();
+      }, 200);
     });
 
     // 预烘焙粒子光晕 sprite — 每粒子创建一次，运行时 drawImage 替代每帧 shadowBlur 高斯模糊
@@ -299,7 +332,7 @@
 
     function createParticles() {
       // 移动端（宽度 ≤768px）减半粒子数，节省 GPU 填充率
-      var count = window.innerWidth <= 768
+      var count = isMobileViewport()
         ? Math.floor(CONFIG.particles.count * 0.5)
         : CONFIG.particles.count;
       const arr = [];
@@ -309,16 +342,22 @@
       return arr;
     }
 
+    var _particleLastTs = null; // 帧率归一化基准
+
     function draw(time) {
+      // 帧间隔折算 — 高刷屏(120/144Hz)速度一致（基准 60Hz）
+      if (_particleLastTs === null) _particleLastTs = time;
+      var k = Math.min(Math.max(time - _particleLastTs, 0), 50) / 16.667;
+      _particleLastTs = time;
       ctx.clearRect(0, 0, w, h);
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
 
         // 上升移动
-        p.y -= p.speed;
+        p.y -= p.speed * k;
         // 水平漂移
-        p.x += p.drift + Math.sin(time * 0.0005 + p.phase) * 0.15;
+        p.x += (p.drift + Math.sin(time * 0.0005 + p.phase) * 0.15) * k;
 
         // 超出顶部则重置到底部
         if (p.y < -p.r * 2) {
@@ -349,7 +388,7 @@
   function initParallax() {
     if (!cursorFish) return;
 
-    var isMobile = window.innerWidth <= 768;
+    var isMobile = isMobileViewport();
 
     var pupil = cursorFish.querySelector('.fish-eye-pupil');
     var shine = cursorFish.querySelector('.fish-eye-shine');
@@ -366,7 +405,13 @@
 
     var scaredUntil = 0;        // 受惊逃跑期间面朝远离光标方向
 
-    function update() {
+    var _fishLastTs = null; // 上一帧时间戳 — 帧率归一化基准
+
+    function update(ts) {
+      // 帧间隔折算 — 高刷屏(120/144Hz)速度一致（基准 60Hz），后台切回限制步长
+      if (_fishLastTs === null) _fishLastTs = ts;
+      var k = Math.min(Math.max(ts - _fishLastTs, 0), 50) / 16.667;
+      _fishLastTs = ts;
       var now = Date.now();
       var idleMs = lastMouseActivity ? now - lastMouseActivity : Infinity;
 
@@ -381,10 +426,10 @@
       }
       // 受惊逃跑期间立刻切纯漫游，不等衰减
       if (now < scaredUntil) { targetBlend = 0; attractBlend = 0; }
-      attractBlend += (targetBlend - attractBlend) * 0.04;
+      attractBlend += (targetBlend - attractBlend) * Math.min(1, 0.04 * k);
 
       // ==== 漫游方向：从左向右，正弦波上下起伏 ====
-      wanderPhase += 0.015;
+      wanderPhase += 0.015 * k;
       var verticalWave = Math.sin(wanderPhase * 0.7) * 0.5; // ±~28°
       var wanderDX = Math.cos(verticalWave);  // 单位方向（始终朝右）
       var wanderDY = Math.sin(verticalWave);  // 上下起伏分量
@@ -432,10 +477,10 @@
         targetVelX = (moveX / moveMag) * FISH_SPEED * speedMult;
         targetVelY = (moveY / moveMag) * FISH_SPEED * speedMult;
       }
-      fishVelX += (targetVelX - fishVelX) * INERTIA;
-      fishVelY += (targetVelY - fishVelY) * INERTIA;
-      mouseX += fishVelX;
-      mouseY += fishVelY;
+      fishVelX += (targetVelX - fishVelX) * Math.min(1, INERTIA * k);
+      fishVelY += (targetVelY - fishVelY) * Math.min(1, INERTIA * k);
+      mouseX += fishVelX * k;
+      mouseY += fishVelY * k;
 
       // ==== 边界处理 ====
       if (mouseX > window.innerWidth + 80) {
@@ -477,12 +522,12 @@
         var diff = rawAngle - fishAngle;
         if (diff > 180) diff -= 360;
         if (diff < -180) diff += 360;
-        fishAngle += diff * 0.08;
+        fishAngle += diff * Math.min(1, 0.08 * k);
       }
 
       // ==== 渲染 ====
       // 平滑翻转：避免 scaleX 瞬时跳变
-      fishFlipSmooth += (fishFlipTarget - fishFlipSmooth) * 0.08;
+      fishFlipSmooth += (fishFlipTarget - fishFlipSmooth) * Math.min(1, 0.08 * k);
       cursorFish.style.transform =
         'translate3d(' + mouseX + 'px, ' + mouseY + 'px, 0) ' +
         'translate(-42.1%, -51.6%) scaleX(' + fishFlipSmooth.toFixed(3) + ') rotate(' + fishAngle + 'deg)';
@@ -501,24 +546,28 @@
           // scaleX 会反转水平方向，用 fishFlip 补偿
           var rawShiftX = (clamped / 35) * 1.6 * (fishFlipSmooth > 0 ? 1 : -1);
           var rawShiftY = (clamped / 35) * 0.9;
-          // 低通滤波：每帧向目标值插值 30%，抑制微小抖动
+          // 低通滤波：每帧向目标值插值 30%，抑制微小抖动；值未变时跳过 DOM 写入
           if (pupil._smoothX == null) { pupil._smoothX = rawShiftX; pupil._smoothY = rawShiftY; }
-          pupil._smoothX += (rawShiftX - pupil._smoothX) * 0.30;
-          pupil._smoothY += (rawShiftY - pupil._smoothY) * 0.30;
-          pupil.setAttribute('cx', (22 + pupil._smoothX).toFixed(2));
-          pupil.setAttribute('cy', (29 + pupil._smoothY).toFixed(2));
+          pupil._smoothX += (rawShiftX - pupil._smoothX) * Math.min(1, 0.30 * k);
+          pupil._smoothY += (rawShiftY - pupil._smoothY) * Math.min(1, 0.30 * k);
+          var pupX = (22 + pupil._smoothX).toFixed(2);
+          var pupY = (29 + pupil._smoothY).toFixed(2);
+          if (pupil._lastAttrX !== pupX) { pupil.setAttribute('cx', pupX); pupil._lastAttrX = pupX; }
+          if (pupil._lastAttrY !== pupY) { pupil.setAttribute('cy', pupY); pupil._lastAttrY = pupY; }
           if (shine) {
-            shine.setAttribute('cx', (21 + pupil._smoothX * 0.65).toFixed(2));
-            shine.setAttribute('cy', (28 + pupil._smoothY * 0.65).toFixed(2));
+            var shX = (21 + pupil._smoothX * 0.65).toFixed(2);
+            var shY = (28 + pupil._smoothY * 0.65).toFixed(2);
+            if (shine._lastAttrX !== shX) { shine.setAttribute('cx', shX); shine._lastAttrX = shX; }
+            if (shine._lastAttrY !== shY) { shine.setAttribute('cy', shY); shine._lastAttrY = shY; }
           }
         } else {
           // 漫游模式：瞳孔归中
           pupil._smoothX = null; pupil._smoothY = null;
-          pupil.setAttribute('cx', '22');
-          pupil.setAttribute('cy', '29');
+          if (pupil._lastAttrX !== '22') { pupil.setAttribute('cx', '22'); pupil._lastAttrX = '22'; }
+          if (pupil._lastAttrY !== '29') { pupil.setAttribute('cy', '29'); pupil._lastAttrY = '29'; }
           if (shine) {
-            shine.setAttribute('cx', '21');
-            shine.setAttribute('cy', '28');
+            if (shine._lastAttrX !== '21') { shine.setAttribute('cx', '21'); shine._lastAttrX = '21'; }
+            if (shine._lastAttrY !== '28') { shine.setAttribute('cy', '28'); shine._lastAttrY = '28'; }
           }
         }
       }
@@ -574,11 +623,16 @@
     var playlist = window.__PLAYLIST__ || [];
     var totalTracks = playlist.length;
 
+    // 安全读取 localStorage：禁用存储（隐私模式/企业策略）时返回 null，避免中断 init 链
+    function safeGet(key) {
+      try { return localStorage.getItem(key); } catch (_err) { return null; }
+    }
+
     // 读取上次保存的音量（localStorage），若无则用默认值
-    var savedVol = parseFloat(localStorage.getItem('gy_volume'));
+    var savedVol = parseFloat(safeGet('gy_volume'));
     var volume = (savedVol >= 0 && savedVol <= 1) ? savedVol : CONFIG.music.startVolume;
     // 读取静音状态（localStorage）——静音态时 gy_volume 保存的是静音前的真实音量
-    var _isMuted = localStorage.getItem('gy_muted') === '1';
+    var _isMuted = safeGet('gy_muted') === '1';
     var _volumeBeforeMute = volume;
     if (_isMuted) volume = 0; // 恢复静音态：当前音量归零，真实音量保留在 _volumeBeforeMute
     var started = false; // 是否已完成首次加载
@@ -597,6 +651,12 @@
     preloadAudio.volume = 0;
     preloadAudio.muted = true; // 静音预加载，避免意外出声
     var preloadDone = false;   // 本轮是否已完成预加载，避免 progress 事件重复触发
+
+    // 预加载失败（网络/404）时重置状态并清空 src，下次切歌可重新预载，坏 src 不挂起
+    preloadAudio.addEventListener('error', function () {
+      preloadDone = false;
+      preloadAudio.src = '';
+    });
 
     function preloadNextTrack() {
       if (!totalTracks || totalTracks <= 1) return;
@@ -634,6 +694,13 @@
     function getDisplayName(index) {
       var filename = playlist[index] || '';
       return filename.replace(/\.mp3$/i, '');
+    }
+
+    // HTML 转义：文件名拼接进 innerHTML 前转义，防止特殊字符破坏 DOM 结构
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+      });
     }
 
     function updateLabel(index) {
@@ -686,16 +753,20 @@
     }
 
     var fadeAnimId = null; // 当前淡入/淡出动画 ID
+    var _playToken = 0;    // 播放请求令牌 — 快速播放/暂停时旧 promise 回调不得覆盖新状态
 
     function play() {
       // 取消正在进行的淡出（如果快速切换）
       if (fadeAnimId) { cancelAnimationFrame(fadeAnimId); fadeAnimId = null; }
+      var token = ++_playToken;
       audio.play().then(function () {
+        if (token !== _playToken) return; // 已被暂停/新播放请求抢占
         musicBtn.classList.add('playing');
         isPlaying = true;
         fadeInVolume();
         preloadDone = false; // 等缓冲够了再自动预加载下一首
       }).catch(function (err) {
+        if (token !== _playToken) return; // 被抢占的失败不提示
         console.warn('播放失败：', err.message);
         updateLabel(currentIndex); // 清除"加载中…"状态
         showToast('⚠️ 播放失败，请检查网络或点击重试', 2500);
@@ -703,6 +774,7 @@
     }
 
     function pause() {
+      _playToken++; // 使未决的播放 promise 失效
       // 立即暂停 + 更新 UI，淡出仅做音量平滑收尾（不阻塞响应）
       audio.pause();
       musicBtn.classList.remove('playing');
@@ -858,7 +930,19 @@
         audio.currentTime = pct * audio.duration;
         progressFill.style.width = (pct * 100) + '%';
         if (!isDown) progressSeeking = false;
+      }, function (key) {
+        // 键盘跳转：左右 ±seekStep，上下 ±seekStepFast，Home/End 首尾；timeupdate 会回写进度条与 aria
+        if (!audio.duration) return;
+        var d = audio.duration;
+        var step = CONFIG.music.seekStep, stepFast = CONFIG.music.seekStepFast;
+        if (key === 'ArrowRight') audio.currentTime = Math.min(d, audio.currentTime + step);
+        else if (key === 'ArrowLeft') audio.currentTime = Math.max(0, audio.currentTime - step);
+        else if (key === 'ArrowUp') audio.currentTime = Math.min(d, audio.currentTime + stepFast);
+        else if (key === 'ArrowDown') audio.currentTime = Math.max(0, audio.currentTime - stepFast);
+        else if (key === 'Home') audio.currentTime = 0;
+        else if (key === 'End') audio.currentTime = d;
       });
+
     }
 
     // === 切歌时弹出曲名提示 ===
@@ -911,7 +995,10 @@
 
     function selectTrack(idx) {
       if (idx === currentIndex && started) return;
-      if (playMode === 2 && started) playHistory.push(currentIndex);
+      if (playMode === 2 && started) {
+        if (playHistory.length >= MAX_HISTORY) playHistory.shift();
+        playHistory.push(currentIndex);
+      }
       loadTrack(idx);
       play();
       notifySongChange();
@@ -941,7 +1028,7 @@
           var cls = isCurrent ? ' class="playlist-item current"' : ' class="playlist-item"';
           html += '<span' + cls + ' data-index="' + i + '">' +
                   '<span class="pl-index">' + (i + 1) + '</span>' +
-                  '<span class="pl-name">' + getDisplayName(i) + '</span>' +
+                  '<span class="pl-name">' + escapeHtml(getDisplayName(i)) + '</span>' +
                   '</span>';
         }
         listInner.innerHTML = html;
@@ -1146,10 +1233,32 @@
       updateVolumeIcon(vol);
     }
 
+    // 统一音量调节入口（键盘快捷键 + 音量条键盘共用），含静音状态同步与持久化
+    function adjustVolume(delta) {
+      if (_isMuted && delta > 0) _isMuted = false;
+      volume = Math.max(0, Math.min(1, volume + delta));
+      audio.volume = volume;
+      updateVolumeUI(volume);
+      try {
+        if (volume <= 0.005) {
+          // 降到 0 = 静音，记录 0.05 作为一键恢复音量
+          _isMuted = true;
+          _volumeBeforeMute = 0.05;
+          localStorage.setItem('gy_volume', '0.050');
+          localStorage.setItem('gy_muted', '1');
+        } else {
+          localStorage.setItem('gy_volume', volume.toFixed(3));
+          localStorage.setItem('gy_muted', '0');
+        }
+      } catch (e) {}
+    }
+
     // 自定义拖拽（用 createSlider 工厂）
     if (volumeBar) {
       createSlider(volumeBar, function (pct) {
         if (pct < 0) return;
+        // 用户主动拖拽 → 取消淡入/淡出动画，避免淡入 step 逐帧回写覆盖拖拽值
+        if (fadeAnimId) { cancelAnimationFrame(fadeAnimId); fadeAnimId = null; }
         if (_isMuted && pct > 0.005) {
           // 拖动音量条即视为主动取消静音，同步标志位防止与音频实际状态脱节
           _isMuted = false;
@@ -1161,7 +1270,14 @@
         updateVolumeUI(volume);
         // 持久化音量
         try { localStorage.setItem('gy_volume', pct.toFixed(3)); } catch (e) {}
+      }, function (key) {
+        // 键盘调音量：复用统一入口（含静音解除/持久化/图标同步）
+        if (key === 'ArrowRight' || key === 'ArrowUp') adjustVolume(0.05);
+        else if (key === 'ArrowLeft' || key === 'ArrowDown') adjustVolume(-0.05);
+        else if (key === 'Home') adjustVolume(-1);   // 降到 0
+        else if (key === 'End') adjustVolume(1);     // 升到 100%
       });
+
     }
 
     function updateVolumeIcon(vol) {
@@ -1243,11 +1359,15 @@
 
     // === 键盘快捷键 ===
     document.addEventListener('keydown', function (e) {
-      // 输入框中不触发
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      // ARIA slider 控件不触发，保留键盘操作给原生功能
+      // 长按不放不重复触发（防止空格连续播放/暂停）
+      if (e.repeat) return;
       var tag = e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.getAttribute('role') === 'slider') return;
+      // 输入框中不触发
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      // ARIA slider 控件不触发，保留键盘操作给原生功能
+      if (e.target.getAttribute('role') === 'slider') return;
+      // 焦点在按钮/链接上时不劫持，保留其原生激活（空格/回车）
+      if (e.target.closest && e.target.closest('button, a, [role="button"]')) return;
       switch (e.key) {
         case ' ':
           e.preventDefault();
@@ -1263,33 +1383,11 @@
           break;
         case 'ArrowUp':
           e.preventDefault();
-          if (_isMuted) _isMuted = false;
-          volume = Math.min(1, volume + 0.05);
-          audio.volume = volume;
-          updateVolumeUI(volume);
-          try {
-            localStorage.setItem('gy_volume', volume.toFixed(3));
-            localStorage.setItem('gy_muted', '0');
-          } catch (e) {}
+          adjustVolume(0.05);
           break;
         case 'ArrowDown':
           e.preventDefault();
-          volume = Math.max(0, volume - 0.05);
-          audio.volume = volume;
-          updateVolumeUI(volume);
-          try {
-            if (volume <= 0.005) {
-              // 降到 0 = 静音，记录 0.05 作为一键恢复音量
-              _isMuted = true;
-              _volumeBeforeMute = 0.05;
-              localStorage.setItem('gy_volume', '0.050');
-              localStorage.setItem('gy_muted', '1');
-            } else {
-              if (_isMuted) _isMuted = false;
-              localStorage.setItem('gy_volume', volume.toFixed(3));
-              localStorage.setItem('gy_muted', '0');
-            }
-          } catch (e) {}
+          adjustVolume(-0.05);
           break;
       }
     });
@@ -1302,8 +1400,8 @@
     if (!cloudsLayer) return;
     var clouds = cloudsLayer.querySelectorAll('.cloud');
 
-    // 移动端跳过（触摸无 hover，且节省性能）
-    if (window.matchMedia('(max-width: 768px)').matches) return;
+    // 触摸设备跳过（无 hover，mousemove 基本不触发），节省性能
+    if (isTouchDevice) return;
 
     var centerX = window.innerWidth / 2;
     var centerY = window.innerHeight / 2;
@@ -1313,24 +1411,32 @@
       centerY = window.innerHeight / 2;
     });
 
+    // rAF 节流：高频 mousemove 只记最新偏移，每帧最多算一次/写一次 transform
+    var _cloudRaf = null;
+    var lastOX = 0;
+    var lastOY = 0;
+
     document.addEventListener('mousemove', function (e) {
       // 鼠标相对于屏幕中心的偏移 → 云层反向微移（视差感）
-      var offsetX = (e.clientX - centerX) / centerX; // -1 ~ 1
-      var offsetY = (e.clientY - centerY) / centerY; // -1 ~ 1
+      lastOX = (e.clientX - centerX) / centerX; // -1 ~ 1
+      lastOY = (e.clientY - centerY) / centerY; // -1 ~ 1
+      if (_cloudRaf) return;
+      _cloudRaf = requestAnimationFrame(function () {
+        _cloudRaf = null;
+        // 不同层级的云移动幅度不同（远层小，近层大）
+        for (var i = 0; i < clouds.length; i++) {
+          var cloud = clouds[i];
+          var parent = cloud.parentElement;
+          var depth = 4; // 默认中层
+          if (parent.classList.contains('cloud-drift--far')) depth = 2;
+          else if (parent.classList.contains('cloud-drift--mid')) depth = 5;
+          else if (parent.classList.contains('cloud-drift--near')) depth = 8;
 
-      // 不同层级的云移动幅度不同（远层小，近层大）
-      for (var i = 0; i < clouds.length; i++) {
-        var cloud = clouds[i];
-        var parent = cloud.parentElement;
-        var depth = 4; // 默认中层
-        if (parent.classList.contains('cloud-drift--far')) depth = 2;
-        else if (parent.classList.contains('cloud-drift--mid')) depth = 5;
-        else if (parent.classList.contains('cloud-drift--near')) depth = 8;
-
-        var dx = offsetX * depth;
-        var dy = offsetY * depth * 0.5; // 垂直方向减半，模拟水平主导的微风
-        cloud.style.transform = 'translate(' + dx.toFixed(1) + 'px, ' + dy.toFixed(1) + 'px)';
-      }
+          var dx = lastOX * depth;
+          var dy = lastOY * depth * 0.5; // 垂直方向减半，模拟水平主导的微风
+          cloud.style.transform = 'translate(' + dx.toFixed(1) + 'px, ' + dy.toFixed(1) + 'px)';
+        }
+      });
     });
   }
 
@@ -1363,6 +1469,14 @@
       iconPath.setAttribute('d', isNight ? ICON_MOON : ICON_SUN);
     }
 
+    // 同步按钮提示文案（手动/自动状态可见可感知）
+    function updateHead() {
+      if (!btn) return;
+      var label = _nightManual ? '已手动切换 · 点击恢复自动' : '切换日夜模式';
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    }
+
     function update() {
       if (_nightManual) return; // 手动模式覆盖自动
       var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -1374,13 +1488,22 @@
 
     if (btn) {
       btn.addEventListener('click', function () {
-        _nightManual = true;
-        applyNight(!document.documentElement.classList.contains('night-mode'));
-        updateIcon();
+        if (_nightManual) {
+          // 再次点击 → 恢复自动模式（按系统偏色/时间重新计算，update 内会刷新图标）
+          _nightManual = false;
+          update();
+          showToast('🌗 已恢复自动日夜切换', 2000);
+        } else {
+          _nightManual = true;
+          applyNight(!document.documentElement.classList.contains('night-mode'));
+          updateIcon();
+        }
+        updateHead();
       });
     }
 
     update();
+    updateHead();
     // 每分钟检查一次
     setInterval(update, 60000);
   }
@@ -1428,12 +1551,14 @@
     var now = new Date();
     var nowTime = now.getTime();
 
-    // ===== UTC 日期工具函数 =====
-    function getUTCDate(ts) {
+    // ===== 本地日期键工具（YYYYMMDD 整数，按访客时区换日）=====
+    // 注意：不能用 UTC 换日——UTC+8 用户每天 00:00–07:59 的访问会被归到前一天，
+    // 导致"连续天数"与"今日次数"统计偏一天。
+    function getLocalDayKey(ts) {
       var d = new Date(ts);
-      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+      return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
     }
-    var todayUTC = getUTCDate(nowTime);
+    var todayLocal = getLocalDayKey(nowTime);
 
     var data;
     try {
@@ -1449,7 +1574,7 @@
         count: 1,            // 总访问次数
         todayCount: 1,       // 今日访问次数
         streak: 1,           // 连续访问天数
-        lastDate: todayUTC   // 上次访问的 UTC 日期
+        lastDate: todayLocal   // 上次访问的本地日期
       };
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (_) {}
       el.textContent = '✨ 初次来访，欢迎光临';
@@ -1457,8 +1582,8 @@
     }
 
     // ===== 判断访问状态 =====
-    var lastDate = data.lastDate || getUTCDate(data.last || data.first);
-    var isNewDay = lastDate !== todayUTC;
+    var lastDate = data.lastDate || getLocalDayKey(data.last || data.first);
+    var isNewDay = lastDate !== todayLocal;
 
     // 更新数据
     data.last = nowTime;
@@ -1467,10 +1592,10 @@
     if (isNewDay) {
       // 新的一天
       data.todayCount = 1;
-      data.lastDate = todayUTC;
-      // 连续天数：昨天访问过则+1，否则重置
-      var yesterdayUTC = todayUTC - 86400000;
-      data.streak = (lastDate === yesterdayUTC) ? (data.streak || 1) + 1 : 1;
+      data.lastDate = todayLocal;
+      // 连续天数：昨天访问过则+1，否则重置（按本地日期键回退一天，跨月/年安全）
+      var yesterdayLocal = getLocalDayKey(nowTime - 86400000);
+      data.streak = (lastDate === yesterdayLocal) ? (data.streak || 1) + 1 : 1;
     } else {
       // 同一天
       data.todayCount = (data.todayCount || 1) + 1;
@@ -1506,7 +1631,7 @@
     }
 
     // 基于日期种子随机挑选（同一天内保持一致）
-    var seed = todayUTC + (count % 7);
+    var seed = todayLocal + (count % 7);
     var idx = Math.abs(String(seed).split('').reduce(function(a, b) {
       return a + b.charCodeAt(0);
     }, 0)) % messages.length;

@@ -3,6 +3,15 @@
    清晨天空 · 淡蓝色调
    ============================================ */
 
+/* --- 键盘焦点可见性 — 主题化焦点环（按明暗背景取对比度足够的颜色） --- */
+:focus-visible {
+  outline: 2px solid #3E7FA5;
+  outline-offset: 2px;
+}
+html.night-mode :focus-visible {
+  outline-color: #9FD1F0;
+}
+
 /* --- 通用 hover 防抖 ---
    圆形元素 hover 时 scale 放大可能导致鼠标在边界处反复进出，
    触发快速闪烁。通过不可见伪元素扩大热区来解决。 */
@@ -639,7 +648,7 @@ body {
   }
 }
 
-/* ---- 曲名（第1行）---- */
+/* ---- 曲名（第1行，按钮语义：可点击复制 + 键盘可达） ---- */
 .music-label {
   font-size: 0.8rem;
   font-weight: 400;
@@ -652,6 +661,11 @@ body {
   padding: 0.1rem 0;
   text-align: center;
   transition: color 0.2s ease;
+  /* 原生 button 样式重置 */
+  border: none;
+  background: none;
+  font-family: inherit;
+  line-height: inherit;
 }
 
 /* 播放后曲名变深色突出 */
@@ -1472,12 +1486,6 @@ html.night-mode .starchart-canvas {
   margin-bottom: 2rem;
 }
 
-/* ============================================
-   塔罗符卡日期选择（白天模式）
-   上排 12 张星座卡片 + 下排星丸日期
-   "清晨天空"浅色毛玻璃质感
-   ============================================ */
-
 .tarot-deck {
   width: 100%;
   max-width: 600px;
@@ -1488,131 +1496,6 @@ html.night-mode .starchart-canvas {
   gap: 1.5rem;
 }
 
-/* ---- 星座选择区：grid-cols-6 × 2 行，塔罗牌样式 ---- */
-.tarot-zodiac-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 0.75rem;
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-/* ---- 符卡毛玻璃方块 — "清晨天空"浅蓝渐变底 + 毛玻璃 + 内发光 ---- */
-.tarot-card {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  box-shadow:
-    0 2px 10px rgba(30, 59, 77, 0.05),
-    0 1px 3px rgba(30, 59, 77, 0.03),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    inset 0 0 12px rgba(137, 196, 225, 0.1);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  transition:
-    transform 0.3s var(--ease-playful-soft),
-    box-shadow 0.3s ease,
-    border-color 0.3s ease,
-    background 0.3s ease,
-    color 0.3s ease;
-  width: auto;
-  height: auto;
-}
-
-/* 光晕悬浮态：柔光边缘 + 微抬 */
-.tarot-card:hover {
-  transform: translateY(-4px) scale(1.05);
-  border-color: var(--accent);
-  box-shadow:
-    0 8px 24px rgba(30, 59, 77, 0.08),
-    0 0 15px rgba(137, 196, 225, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    inset 0 0 16px rgba(137, 196, 225, 0.18);
-}
-
-.tarot-card:active {
-  transform: translateY(-1px) scale(0.94);
-  transition: transform var(--dur-instant) var(--ease-snappy);
-}
-
-/* 星座符号 — 淡紫色调 */
-.tarot-glyph {
-  font-size: 1.6rem;
-  line-height: 1;
-  opacity: 0.6;
-  color: #8E7CC3;
-  filter: grayscale(0.15);
-  transition: opacity 0.3s ease, transform 0.3s ease, color 0.3s ease, filter 0.3s ease;
-}
-.tarot-card:hover .tarot-glyph {
-  opacity: 0.9;
-  filter: grayscale(0);
-}
-
-/* 月份文字 */
-.tarot-label {
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-  transition: color 0.3s ease;
-}
-.tarot-card:hover .tarot-label { color: var(--text-primary); }
-
-/* ---- 选中态 — 湖蓝强调色 + 白色文字 ---- */
-.tarot-card.active {
-  background: var(--accent);
-  border-color: var(--accent-hover);
-  box-shadow:
-    0 4px 16px rgba(109, 179, 212, 0.35),
-    0 0 18px rgba(137, 196, 225, 0.2);
-  transform: translateY(-2px);
-}
-.tarot-card.active .tarot-glyph {
-  opacity: 1;
-  color: #fff;
-  filter: grayscale(0);
-  transform: scale(1.15);
-}
-.tarot-card.active .tarot-label {
-  color: #fff;
-}
-
-/* ---- 确认锁定 — 暖金色 ---- */
-.tarot-card.matched {
-  background: linear-gradient(145deg,
-    rgba(255, 245, 220, 0.95) 0%,
-    rgba(240, 200, 130, 0.85) 40%,
-    rgba(232, 184, 96, 0.75) 100%
-  );
-  border-color: #E8B860;
-  box-shadow:
-    0 6px 18px rgba(232, 184, 96, 0.35),
-    0 0 22px rgba(240, 200, 130, 0.25);
-}
-.tarot-card.matched .tarot-glyph { opacity: 1; color: #fff; }
-.tarot-card.matched .tarot-label { color: #fff; }
-
-/* ---- 响应式：移动端 3 列 ---- */
-@media (max-width: 480px) {
-  .tarot-zodiac-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.4rem;
-    max-width: 240px;
-  }
-  .tarot-glyph { font-size: 1rem; }
-  .tarot-label { font-size: 0.55rem; }
-  .tarot-card { border-radius: 10px; }
-}
 
 /* ---- 中心神谕文字 ---- */
 .tarot-center {
@@ -1632,13 +1515,34 @@ html.night-mode .starchart-canvas {
   color: var(--text-primary);
   letter-spacing: 0.1em;
   min-height: 2.2rem;
+  display: inline-block;
   transition: color 0.4s ease;
+}
+
+/* 星座图标出现 — 由 JS 每次切换时重放（class 'pop' 强制回流） */
+.tarot-oracle.pop {
+  animation: oracle-pop 0.4s var(--ease-premium);
+}
+@keyframes oracle-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.65); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .tarot-hint {
   font-size: 0.82rem;
   color: var(--text-secondary);
   transition: opacity 0.5s ease;
+}
+
+/* ---- 确认区 — 固定高度容器：确认按钮/结果面板切换不引起布局抖动 ---- */
+.tarot-actions {
+  min-height: 3.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.2rem;
 }
 
 /* ---- 揭晓按钮 ---- */
@@ -1657,11 +1561,11 @@ html.night-mode .starchart-canvas {
   backdrop-filter: blur(8px);
   transition:
     opacity 0.4s ease,
-    transform 0.3s var(--ease-playful-soft),
+    transform 0.3s var(--ease-premium),
     box-shadow 0.3s ease,
     background 0.3s ease,
     color 0.3s ease;
-  animation: tarot-reveal 0.45s var(--ease-playful) both;
+  animation: tarot-reveal 0.45s var(--ease-premium) both;
 }
 
 @keyframes tarot-reveal {
@@ -1683,456 +1587,250 @@ html.night-mode .starchart-canvas {
   transition: transform var(--dur-instant) var(--ease-snappy);
 }
 
-/* 夜间模式 — 塔罗符卡隐藏，由 JS display:none 接管 */
-html.night-mode .tarot-deck {
-  display: none;
+/* 确认选择按钮 — 夜间深蓝毛玻璃底 + 亮金文字（避免白色渐变按钮在深蓝背景上刺眼） */
+html.night-mode .tarot-confirm {
+  border-color: rgba(232, 184, 96, 0.55);
+  background: linear-gradient(135deg,
+    rgba(25, 45, 70, 0.8) 0%,
+    rgba(232, 184, 96, 0.16) 100%
+  );
+  color: #E8C268;
 }
+html.night-mode .tarot-confirm:hover {
+  box-shadow: 0 0 24px rgba(232, 184, 96, 0.4);
+  background: linear-gradient(135deg,
+    rgba(38, 64, 96, 0.85) 0%,
+    rgba(232, 184, 96, 0.26) 100%
+  );
+}
+
+
 
 /* ============================================
-   日期选择 — 漂浮星丸网格（白天模式）
-   不依赖周几/星期排列，圆润自然
+   星轨滑星 — 统一的生日选择器（白天/夜间皮肤）
+   双弧星轨：内弧月份节点 + 外弧日期星点 + 星核拖动
    ============================================ */
 
-.day-picker {
+/* 星轨容器 — 默认允许垂直滚动（弧形轨道内由 .trail-arc-hit 声明 touch-action: none 接管） */
+.star-trail {
   width: 100%;
-  max-width: 480px;
+  max-width: 600px;
   margin: 0 auto;
+  touch-action: pan-y;
 }
 
-.day-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.55rem;
-  padding: 0.5rem 0;
-}
-
-/* 日期星丸 — 圆形毛玻璃，轻盈漂浮 */
-.day-pill {
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  box-shadow:
-    0 1.5px 5px rgba(30, 59, 77, 0.04),
-    0 0.5px 1px rgba(30, 59, 77, 0.02),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 0 10px rgba(137, 196, 225, 0.08);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.85rem;
-  font-family: var(--font-cn);
-  font-weight: 500;
-  color: #1E293B;
-  transition:
-    transform 0.25s var(--ease-playful-soft),
-    box-shadow 0.25s ease,
-    border-color 0.25s ease,
-    background 0.25s ease,
-    color 0.2s ease;
+.star-trail-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: manipulation;
 }
 
-/* 漂浮悬浮 */
-.day-pill:hover {
-  transform: translateY(-3px) scale(1.12);
-  border-color: var(--accent);
-  box-shadow:
-    0 6px 16px rgba(30, 59, 77, 0.08),
-    0 0 15px rgba(137, 196, 225, 0.12);
-  color: var(--text-primary);
+/* 日期弧线 — 一条完整的纯色细线（不随星座分段，任何背景都完整可见；无动画，直接显示） */
+.trail-day-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.9;
 }
-.day-pill:active {
-  transform: translateY(-1px) scale(0.93);
-  transition: transform var(--dur-instant) var(--ease-snappy);
+html.night-mode .trail-day-line {
+  opacity: 1;
 }
 
-/* 今日 — 小点标记，不喧宾夺主 */
-.day-pill.today::after {
-  content: '';
-  position: absolute;
-  bottom: 2px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent-hover);
-  opacity: 0.7;
+/* 日期星点 — 默认稀疏；选中/滑动时以当前日为中心 ±2 天浮现，其余淡出（class 由 JS 维护）
+   换月重建时沿弧依次点亮（animation-delay 由 JS 递增设置） */
+.trail-star {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.25s ease;
+  animation: trail-star-spawn 0.45s var(--ease-premium) backwards;
+}
+@keyframes trail-star-spawn {
+  0%   { opacity: 0; transform: scale(0.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.trail-star.faint {
+  opacity: 0.12;
 }
 
-.day-pill.today {
-  position: relative;
-}
-
-/* 选中 */
-.day-pill.active {
-  background: var(--accent);
-  border-color: var(--accent-hover);
-  box-shadow:
-    0 3px 14px rgba(109, 179, 212, 0.35),
-    0 0 16px rgba(137, 196, 225, 0.22);
-  color: #fff;
-  font-weight: 600;
-  transform: translateY(-2px) scale(1.1);
-}
-
-/* 超出月份天数 — 变灰禁用 */
-.day-pill.dimmed {
-  opacity: 0.2;
+/* 日期数字 — 外弧外侧常显；换月时从弧线上依次升起（沿半径径向飘出 + 淡入缩放），
+   选中日金色高亮（class 由 JS 维护）；--rise-x/-y 为由 JS 计算的弧线→标签径向偏移 */
+.trail-day-label {
+  font-size: 10px;
+  font-weight: 500;
+  fill: var(--text-secondary);
+  opacity: 0.6;
   pointer-events: none;
-  filter: grayscale(1);
-  transform: scale(0.85);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: fill 0.25s ease, opacity 0.25s ease;
+  animation: trail-label-rise 0.5s var(--ease-premium) backwards;
 }
-
-/* 确认锁定 */
-.day-pill.matched {
-  background: linear-gradient(145deg,
-    rgba(255, 245, 220, 0.95) 0%,
-    rgba(240, 200, 130, 0.85) 35%,
-    rgba(232, 184, 96, 0.7) 100%
-  );
-  border-color: #E8B860;
-  box-shadow:
-    0 3px 14px rgba(232, 184, 96, 0.35),
-    0 0 20px rgba(240, 200, 130, 0.22);
-  color: #fff;
+@keyframes trail-label-rise {
+  from {
+    opacity: 0;
+    transform: translate(var(--rise-x, 0), var(--rise-y, 0)) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+.trail-day-label.active {
+  fill: #F6C660;
+  opacity: 1;
   font-weight: 600;
 }
 
-@media (max-width: 480px) {
-  .day-picker {
-    max-width: 340px;
-  }
-  .day-grid {
-    gap: 0.35rem;
-    padding: 0.3rem 0;
-  }
-  .day-pill {
-    width: 2.2rem;
-    height: 2.2rem;
-    font-size: 0.7rem;
-  }
-}
-
-/* ============================================
-   星环日轨 — 夜间模式的交互式星座查询
-   ============================================ */
-
-.orbit-ring {
-  position: relative;
-  width: min(85vh, 85vw, 520px);
-  height: min(85vh, 85vw, 520px);
-  margin: 0 auto;
-  z-index: 2;
-}
-
-.orbit-svg {
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 0 10px rgba(137, 196, 225, 0.25));
-  /* 整体静止 — 内外圈各自独立旋转（JS rAF 直接驱动 style.transform，Compositor-only） */
-}
-.orbit-outer-group { transform: rotate(0deg); transform-origin: 300px 300px; transition: none; }
-.orbit-inner-group { transform: rotate(0deg); transform-origin: 300px 300px; transition: none; }
-
-/* 轨道环 */
-.orbit-track {
+/* 选中涟漪 — 金环从选中星点扩散消散（由 JS 在选中日时创建，animationend 自清理） */
+.trail-ring {
   fill: none;
-  stroke: rgba(120, 175, 205, 0.5);
-  stroke-width: 1.5px;
-}
-
-.orbit-track--outer {
-  stroke-width: 1.5px;
-  stroke: rgba(160, 180, 220, 0.3);
-  stroke-dasharray: 4 6;
-  /* 虚线沿轨道缓缓流动（与外圈自转同向），星轨感 */
-  animation: track-flow 60s linear infinite;
-}
-
-@keyframes track-flow {
-  to { stroke-dashoffset: -200; } /* dasharray 周期 10 的整数倍，循环无缝 */
-}
-
-.orbit-track--inner {
-  stroke-width: 1px;
-  stroke: rgba(160, 180, 220, 0.18);
-}
-
-/* 月份节点（外圈）— 径向渐变发光星体（亮核 + 柔光晕） */
-.orbit-outer-nodes .orbit-node {
-  fill: url(#orbit-star-blue);
-  r: 8;
-  transition: fill 0.4s ease, r 0.4s ease, filter 0.4s ease;
-}
-.orbit-outer-nodes .orbit-node.active {
-  fill: url(#orbit-star-lit);
-  r: 11;
-  filter: drop-shadow(0 0 10px rgba(180, 210, 240, 0.9));
-  animation: none;
-  opacity: 1;
-}
-.orbit-outer-nodes .orbit-node.matched {
-  fill: url(#orbit-star-gold);
-  r: 11;
-  filter: drop-shadow(0 0 12px rgba(240, 192, 96, 0.95));
-  animation: none;
-  opacity: 1;
-}
-
-/* 日期节点（内圈） */
-.orbit-inner-nodes .orbit-node {
-  fill: url(#orbit-star-blue);
-  r: 6;
-  transition: fill 0.35s ease, r 0.35s ease, filter 0.35s ease, cx 0.45s ease-out, cy 0.45s ease-out;
-}
-.orbit-inner-nodes .orbit-node.active {
-  fill: url(#orbit-star-lit);
-  r: 8;
-  filter: drop-shadow(0 0 6px rgba(180, 210, 240, 0.7));
-  animation: none;
-  opacity: 1;
-}
-.orbit-inner-nodes .orbit-node.matched {
-  fill: url(#orbit-star-gold);
-  r: 8;
-  filter: drop-shadow(0 0 9px rgba(240, 192, 96, 0.9));
-  animation: none;
-  opacity: 1;
-}
-
-/* 中心微光 — 星盘核心点，缓慢呼吸 */
-.orbit-core {
-  fill: rgba(180, 160, 220, 0.6);
-  animation: core-breathe 4s ease-in-out infinite;
-}
-
-@keyframes core-breathe {
-  0%, 100% { r: 3; opacity: 0.55; }
-  50%      { r: 4.6; opacity: 1; }
-}
-
-/* 点击涟漪 — 从星点扩散的波纹（JS 动态插入，动画后自删） */
-.orbit-ripple {
-  fill: none;
-  stroke: rgba(180, 215, 245, 0.8);
-  stroke-width: 1.5;
+  stroke: rgba(255, 238, 190, 0.95);
+  stroke-width: 1.6;
+  transform-box: fill-box;
+  transform-origin: center;
   pointer-events: none;
-  animation: orbit-ripple-out 0.55s cubic-bezier(0.2, 0.6, 0.35, 1) forwards;
+  animation: trail-ring-out 0.55s var(--ease-premium) forwards;
+}
+@keyframes trail-ring-out {
+  0%   { opacity: 1; transform: scale(0.55); }
+  100% { opacity: 0; transform: scale(2.8); }
 }
 
-@keyframes orbit-ripple-out {
-  from { r: 5; opacity: 0.9; }
-  to   { r: var(--ripple-max, 34px); opacity: 0; }
+/* 防抖降级：重建间隔 <350ms 时跳过一次性动画（快速连点/连续收尾，避免动画重放闪跳） */
+.trail-day-arc.no-anim .trail-star,
+.trail-day-arc.no-anim .trail-day-label,
+.trail-month-arc.no-anim .month-node.active {
+  animation: none;
 }
 
-/* 确认爆发 — 星环中心迸出的金色星屑（JS 动态插入，动画后自删） */
-.orbit-burst-dot {
-  fill: #F0C060;
-  pointer-events: none;
-  animation: orbit-burst-fly 0.9s cubic-bezier(0.15, 0.6, 0.3, 1) forwards;
+/* 选中日星点 — 微光外溢 */
+.trail-star.active {
+  filter: drop-shadow(0 0 4px rgba(255, 238, 190, 0.95));
+}
+html.night-mode .trail-star.active {
+  filter: drop-shadow(0 0 5px rgba(255, 238, 190, 1));
 }
 
-@keyframes orbit-burst-fly {
-  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
-  100% { transform: translate(var(--burst-dx, 0px), var(--burst-dy, 0px)) scale(0.2); opacity: 0; }
+/* 今日标记 — 柔和呼吸 */
+.trail-today {
+  animation: trail-today-breathe 2.8s ease-in-out infinite;
 }
-
-/* 星点点击热区放大 — 透明描边计入 SVG 命中区域，肉眼不可见但可点 */
-.orbit-node {
-  cursor: pointer;
-  stroke: transparent;
-  stroke-width: 40px;
-  transition: fill 0.35s ease, r 0.35s ease, filter 0.35s ease, cx 0.45s ease-out, cy 0.45s ease-out;
-  /* 呼吸闪烁 — 每颗星随机周期/相位（JS 设置变量），选中后停闪保持稳定 */
-  animation: star-twinkle var(--twinkle-dur, 4s) ease-in-out infinite;
-  animation-delay: var(--twinkle-delay, 0s);
-}
-/* 内圈 31 星更密集，热区适度收窄避免相邻重叠 */
-.orbit-inner-nodes .orbit-node {
-  stroke-width: 16px;
-}
-.orbit-node:hover {
-  filter: brightness(1.4) drop-shadow(0 0 6px rgba(200, 220, 250, 0.6));
-}
-/* hover 星点放大 — 即时可点性反馈（选中态尺寸更大，不缩小） */
-.orbit-outer-nodes .orbit-node:not(.active):not(.matched):hover { r: 10; }
-.orbit-inner-nodes .orbit-node:not(.active):not(.matched):hover { r: 7.5; }
-
-@keyframes star-twinkle {
+@keyframes trail-today-breathe {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
 }
 
-/* 四芒星光 — 选中星绽放的旋转呼吸光芒（JS 定位到选中星；确认后转金） */
-.orbit-spark-pos {
-  opacity: 0;
+/* 星核 — 拖动选择器（事件由 svg 统一处理，自身不拦截）
+   非拖拽状态（点选/换月/换日）下星核带平滑飞行过渡 */
+.trail-core-group {
+  cursor: grab;
   pointer-events: none;
-  transition: opacity 0.35s ease;
+  transition: transform 0.35s var(--ease-premium);
 }
-/* 确保旋转组和四芒星不受祖先 transition 污染，防止节点重建时与自转竞争同一帧 */
-#orbit-outer-group,
-#orbit-inner-group,
-#orbit-spark-outer,
-#orbit-spark-inner {
-  transition: none;
+.trail-core-group.dragging {
+  cursor: grabbing;
+  transition: none;   /* 拖拽中每帧直写，禁用过渡避免滞后 */
 }
-.orbit-spark-pos.on {
+.trail-core-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: trail-core-breathe 2s ease-in-out infinite;
+}
+@keyframes trail-core-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.95; transform: scale(1.12); }
+}
+.trail-core-group.dragging .trail-core-halo {
+  animation: trail-core-breathe-fast 0.7s ease-in-out infinite;
+}
+@keyframes trail-core-breathe-fast {
+  0%, 100% { opacity: 0.85; transform: scale(1.05); }
+  50%      { opacity: 1; transform: scale(1.22); }
+}
+.trail-core-inner {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: fill 0.4s ease, transform 0.25s ease;
+  /* 白心在浅色底上的描边轮廓：白天增加可见性 */
+  stroke: rgba(137, 196, 225, 0.65);
+  stroke-width: 1.5;
+}
+html.night-mode .trail-core-inner {
+  stroke: rgba(220, 240, 255, 0.55);
+}
+.trail-core-group.dragging .trail-core-inner {
+  transform: scale(1.15);
+}
+.trail-core-group.confirmed .trail-core-inner {
+  fill: #F6C660;
+}
+
+/* 月份弧：12 节点均分 + 标签（内弧）；激活节点弹跳动效 */
+.month-node {
+  transition: filter 0.25s ease;
+  pointer-events: none;
+  stroke: #FFFFFF;
+  stroke-width: 1.4;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.month-node.active {
+  filter: drop-shadow(0 0 5px rgba(255, 238, 190, 0.95));
+  animation: month-node-pop 0.45s var(--ease-premium);
+}
+@keyframes month-node-pop {
+  0%   { transform: scale(0.6); }
+  100% { transform: scale(1); }
+}
+.month-label {
+  font-size: 13px;
+  font-weight: 500;
+  fill: var(--text-secondary);
+  opacity: 0.85;
+  pointer-events: none;
+  transition: fill 0.25s ease, opacity 0.25s ease;
+}
+.month-label.active {
+  fill: #F6C660;
   opacity: 1;
+  font-weight: 600;
 }
-.orbit-spark {
-  stroke: rgba(222, 238, 252, 0.9);
-  stroke-width: 1;
-  stroke-linecap: round;
+
+/* 移动端：细线略加粗、标签可读 */
+@media (max-width: 480px) {
+  .trail-day-line { stroke-width: 3; }
+  .trail-day-label { font-size: 12px; }
+  .month-label { font-size: 12px; }
+}
+
+/* 两条独立的弧形滑动轨道（透明命中带）：
+   点在/滑在带内即锁定该弧维度（月轨 or 日轨），带内手势不触发页面滚动；
+   带外（容器 pan-y 区域）仍可正常滚动。 */
+.trail-arc-hit {
   fill: none;
-  animation: spark-spin 14s linear infinite;
-}
-.orbit-spark-pos.gold .orbit-spark {
-  stroke: rgba(245, 210, 140, 0.95);
-}
-
-@keyframes spark-spin {
-  0%   { transform: rotate(0deg) scale(1); }
-  50%  { transform: rotate(180deg) scale(1.25); }
-  100% { transform: rotate(360deg) scale(1); }
-}
-
-/* 轨道碎屑粒子 — 沿轨道慢速漂移 + 闪烁 */
-.orbit-debris {
-  pointer-events: none;
-}
-.orbit-debris-dot {
-  transform-origin: 300px 300px;
-  /* 漂移与闪烁周期独立：--debris-speed 绕环一周（慢），--debris-twinkle 明暗呼吸（快） */
-  animation:
-    debris-rotate var(--debris-speed, 60s) linear infinite,
-    debris-twinkle var(--debris-twinkle, 3s) ease-in-out infinite;
-  /* 闪烁用负延迟错开相位（负值立即生效，无启动跳变） */
-  animation-delay: 0s, var(--debris-phase, 0s);
-}
-@keyframes debris-rotate {
-  0%   { transform: rotate(var(--debris-angle, 0rad)); }
-  100% { transform: rotate(calc(var(--debris-angle, 0rad) + 6.2832rad)); }
-}
-@keyframes debris-twinkle {
-  0%, 100% { opacity: 0.25; }
-  50%      { opacity: 0.85; }
-}
-
-/* 中心数字标注 — hover 星点预览 / 已选月日反馈 */
-.orbit-center-label {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 1.05rem;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary); /* 日夜自适应 — 白天深青/夜间浅蓝 */
-  text-shadow: 0 0 12px rgba(137, 196, 225, 0.5);
-  white-space: nowrap;
-  pointer-events: none;
-}
-/* 中心标注脉冲 — 月日选齐/确认瞬间的汇聚反馈（JS 挂载，动画后移除） */
-.orbit-center-label.pulse {
-  animation: center-pulse 0.5s var(--ease-playful);
-}
-
-@keyframes center-pulse {
-  0%   { transform: translate(-50%, -50%) scale(1); }
-  40%  { transform: translate(-50%, -50%) scale(1.18); text-shadow: 0 0 18px rgba(240, 200, 120, 0.8); }
-  100% { transform: translate(-50%, -50%) scale(1); }
-}
-
-/* ========== 星环退场动画 ========== */
-
-/* 确认态节点退场：短暂闪烁白光后褪回默认蓝色（退出用加速曲线 ease-in） */
-.orbit-node.matched.fading {
-  animation: orbit-node-fadeout 0.45s ease-in forwards;
-}
-
-@keyframes orbit-node-fadeout {
-  0%   { fill: #F5D08C; r: 5; filter: drop-shadow(0 0 6px rgba(240,192,96,0.8)); }
-  30%  { fill: #FFFFFF; r: 6; filter: drop-shadow(0 0 10px rgba(255,255,255,0.9)); }
-  100% { fill: #89C4E1; r: 4; filter: none; }
-}
-
-/* 四芒星光退场：缩小 + 淡出 */
-.orbit-spark.on.gold.fading {
-  animation: orbit-spark-shrink 0.35s ease-in forwards;
-}
-
-@keyframes orbit-spark-shrink {
-  0%   { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(0.2); }
-}
-
-/* 结果面板淡出（transition 方式，保持 transform 上下文兼容） */
-.orbit-result.fading {
-  opacity: 0;
-  transition: opacity 0.35s ease-out;
-}
-
-/* 中心标签退场脉冲（保持 translate(-50%, -50%) 居中不漂移） */
-.orbit-center-label.fading {
-  animation: orbit-label-fadeout 0.4s ease-in forwards;
-}
-
-@keyframes orbit-label-fadeout {
-  0%   { transform: translate(-50%, -50%) scale(1.15); color: #F5D08C; text-shadow: 0 0 12px rgba(240,192,96,0.6); }
-  100% { transform: translate(-50%, -50%) scale(1); color: inherit; text-shadow: 0 0 12px rgba(137, 196, 225, 0.5); }
-}
-
-/* 操作提示 */
-.orbit-hint {
-  position: absolute;
-  bottom: -2.2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  pointer-events: none;
-  transition: opacity 0.5s ease;
-}
-
-/* 确认按钮 */
-.orbit-confirm {
-  position: absolute;
-  bottom: -4.8rem;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0.5rem 1.8rem;
-  border: 1px solid rgba(240, 192, 96, 0.5);
-  border-radius: 20px;
-  background: rgba(20, 35, 55, 0.7);
-  color: #F0C060;
-  font-size: 0.95rem;
+  stroke: rgba(0, 0, 0, 0);   /* 完全透明，不参与视觉 */
+  stroke-width: 44;
+  pointer-events: stroke;
+  touch-action: none;
   cursor: pointer;
-  backdrop-filter: blur(6px);
-  transition: opacity 0.4s ease, transform 0.3s ease, box-shadow 0.3s ease;
-  white-space: nowrap;
-  /* 每次从 display:none 显示时重新触发弹入 */
-  animation: confirm-in 0.35s var(--ease-playful);
 }
 
-@keyframes confirm-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.85); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+/* 内弧引导线 — 提示内弧可滑动（外弧日期自带完整细线，无需引导线） */
+.trail-month-guide {
+  fill: none;
+  stroke: rgba(137, 196, 225, 0.55);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  pointer-events: none;
 }
-.orbit-confirm:hover {
-  transform: translateX(-50%) scale(1.05);
-  box-shadow: 0 0 20px rgba(240, 192, 96, 0.3);
+html.night-mode .trail-month-guide {
+  stroke: rgba(160, 200, 230, 0.4);
 }
-.orbit-confirm:active {
-  transform: translateX(-50%) scale(0.93);
-  transition: transform var(--dur-instant) var(--ease-snappy);
-}
+
 
 .tarot-deck .orbit-result {
   /* 白天模式：流式布局，自然排列 */
@@ -2145,63 +1843,46 @@ html.night-mode .tarot-deck {
   font-size: 0.88rem;
   white-space: normal;
   pointer-events: auto;
-  animation: tarot-result-in 0.45s var(--ease-playful) forwards;
+  animation: tarot-result-in 0.45s var(--ease-premium) forwards;
   margin-top: 0.4rem;
 }
 
-/* 确认后的浮动结果面板 — 夜间星环用绝对定位 */
-.orbit-ring .orbit-result {
-  position: absolute;
-  bottom: -4.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  white-space: nowrap;
-  pointer-events: auto;
-  animation: orbit-result-in 0.5s var(--ease-playful) both;
-}
 
-/* 结果面板内的「重新选择」按钮 */
+/* 结果面板内的「重新选择」按钮 — 与确认选择按钮同款配色/大小 */
 .orbit-redo {
   pointer-events: auto;
   display: inline-block;
   margin: 0;
-  padding: 0.4rem 1.4rem;
-  font-size: 0.78rem;
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border: 1px solid var(--card-border);
-  border-radius: 18px;
+  padding: 0.55rem 2rem;
+  font-size: 0.95rem;
+  color: #B87A20;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(232, 184, 96, 0.15) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(232, 184, 96, 0.5);
+  border-radius: 22px;
   cursor: pointer;
   white-space: nowrap;
   font-family: var(--font-cn);
-  letter-spacing: 0.06em;
-  transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: color 0.25s ease, background 0.3s ease, border-color 0.25s ease, box-shadow 0.3s ease;
 }
 .orbit-redo:hover {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: 0 0 14px rgba(137, 196, 225, 0.35);
+  box-shadow: 0 0 24px rgba(232, 184, 96, 0.35);
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(232, 184, 96, 0.28) 100%
+  );
 }
 
 /* 白天模式：不使用 translateX(-50%)，自然居中 */
 @keyframes tarot-result-in {
   0%   { opacity: 0; transform: translateY(12px) scale(0.9); }
-  60%  { opacity: 1; transform: translateY(-2px) scale(1.02); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* 夜间保持原有动画 */
-@keyframes orbit-result-in {
-  0%   { opacity: 0; transform: translateX(-50%) translateY(14px) scale(0.9); }
-  60%  { opacity: 1; transform: translateX(-50%) translateY(-3px) scale(1.03); }
-  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-}
 
 /* 运势面板 — 浮动在星环下方（白天间距 2rem，夜间 6.5rem 容纳 hint/按钮） */
 .zodiac-grid {
@@ -2245,12 +1926,6 @@ html.night-mode .zodiac-grid {
   font-weight: 500;
   color: var(--text-primary);
   margin-bottom: 0.2rem;
-}
-
-.zodiac-card .card-subtitle {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-bottom: 1rem;
 }
 
 /* ---- 运势卡片（通栏） ---- */
@@ -2505,33 +2180,9 @@ html.night-mode .zodiac-grid {
     padding: 1.3rem;
   }
 
-  /* 星环日轨 — 移动端缩放 */
-  .orbit-ring {
-    width: min(75vh, 85vw, 380px);
-    height: min(75vh, 85vw, 380px);
-  }
-  .orbit-hint {
-    font-size: 0.72rem;
-    bottom: -1.8rem;
-  }
-  .orbit-center-label {
-    font-size: 0.9rem;
-  }
-  .orbit-confirm {
-    bottom: -4rem;
-    padding: 0.4rem 1.4rem;
-    font-size: 0.85rem;
-  }
-  .orbit-ring .orbit-result {
-    bottom: -3.8rem;
-    font-size: 0.78rem;
-  }
   .zodiac-grid {
     margin-top: 2.5rem;
   }
-  /* 星环热区 — 移动端放大防误触 */
-  .orbit-node { stroke-width: 24px; }
-  .orbit-inner-nodes .orbit-node { stroke-width: 12px; }
 }
 
 /* 桌面端运势双栏布局 */
@@ -2603,19 +2254,16 @@ html.night-mode .zodiac-grid {
    移动端 hover 清理 — 触屏设备不需要 hover 假态
    ============================================ */
 @media (hover: none) {
-  .tarot-card:hover { transform: none !important; box-shadow: none !important; }
-  .day-pill:hover { transform: none !important; box-shadow: none !important; }
   .social-link:hover { transform: none !important; box-shadow: none !important; background: rgba(255, 255, 255, 0.45) !important; color: var(--text-primary) !important; }
   .music-btn:hover { transform: none !important; box-shadow: none !important; }
   .music-btn--sm:hover { transform: none !important; background: transparent !important; color: var(--text-secondary) !important; }
   .zodiac-card:hover { transform: none !important; box-shadow: 0 2px 20px rgba(137, 196, 225, 0.15) !important; }
   .fortune-tab:hover { transform: none !important; }
-  .orbit-redo:hover { transform: none !important; box-shadow: none !important; background: rgba(255, 255, 255, 0.65) !important; color: var(--text-primary) !important; border-color: var(--card-border) !important; }
-  .orbit-confirm:hover { transform: translateX(-50%) !important; box-shadow: none !important; }
+  .orbit-redo:hover { transform: none !important; box-shadow: none !important; background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(232, 184, 96, 0.15) 100%) !important; color: #B87A20 !important; border-color: rgba(232, 184, 96, 0.5) !important; }
   html.night-mode .social-link:hover { background: rgba(30, 50, 75, 0.55) !important; color: var(--text-primary) !important; }
   html.night-mode .music-btn--sm:hover { background: transparent !important; color: var(--text-secondary) !important; }
   html.night-mode .fortune-tab:hover { background: rgba(30, 50, 75, 0.55) !important; color: rgba(180, 208, 228, 0.6) !important; }
-  html.night-mode .orbit-redo:hover { background: rgba(25, 45, 70, 0.75) !important; color: var(--text-primary) !important; }
+  html.night-mode .orbit-redo:hover { background: linear-gradient(135deg, rgba(25, 45, 70, 0.8) 0%, rgba(232, 184, 96, 0.16) 100%) !important; color: #E8C268 !important; border-color: rgba(232, 184, 96, 0.55) !important; }
   html.night-mode .music-btn:hover { background: rgba(30, 50, 75, 0.55) !important; box-shadow: none !important; }
 }
 
@@ -2687,8 +2335,6 @@ html.night-mode .zodiac-grid {
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .music-player,
   .social-link,
-  .tarot-card,
-  .day-pill,
   .orbit-redo,
   .fortune-tab,
   .toast,
@@ -2756,27 +2402,21 @@ html.night-mode .music-btn--sm.mode-shuffle {
   color: #6DAED4;
   background: rgba(30, 50, 75, 0.45);
 }
-/* 星环日轨 — 夜间微降亮度 */
-html.night-mode .orbit-track {
-  stroke: rgba(120, 170, 210, 0.4);
-}
-html.night-mode .orbit-track--outer {
-  stroke: rgba(120, 170, 210, 0.34);
-}
-html.night-mode .orbit-track--inner {
-  stroke: rgba(120, 170, 210, 0.22);
-}
-html.night-mode .orbit-confirm {
-  background: rgba(18, 28, 42, 0.75);
-}
-html.night-mode .orbit-svg {
-  filter: drop-shadow(0 0 6px rgba(120, 170, 210, 0.15));
-}
-/* 重新选择按钮 — 夜间使用深色毛玻璃底，浅色文字 */
+/* 重新选择按钮 — 夜间与确认选择按钮同款：深蓝毛玻璃底 + 亮金文字 */
 html.night-mode .orbit-redo {
-  background: rgba(25, 45, 70, 0.75);
-  color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(232, 184, 96, 0.55);
+  background: linear-gradient(135deg,
+    rgba(25, 45, 70, 0.8) 0%,
+    rgba(232, 184, 96, 0.16) 100%
+  );
+  color: #E8C268;
+}
+html.night-mode .orbit-redo:hover {
+  box-shadow: 0 0 24px rgba(232, 184, 96, 0.4);
+  background: linear-gradient(135deg,
+    rgba(38, 64, 96, 0.85) 0%,
+    rgba(232, 184, 96, 0.26) 100%
+  );
 }
 /* 卡片 — 夜间切换到深色阴影 */
 html.night-mode .zodiac-card {
@@ -2852,3 +2492,4 @@ html.night-mode .playlist-item.current::before {
 html.night-mode .playlist-inner::-webkit-scrollbar-thumb {
   background: rgba(140, 180, 210, 0.25);
 }
+

@@ -29,6 +29,13 @@ def main():
 
     files.sort(key=natural_key)
 
+    # 检测异常字符（U+00A0 非断行空格在跨平台同步/复制曲名时是隐性错乱源）
+    odd = [f for f in files if '\u00a0' in f]
+    if odd:
+        print(f'[警告] {len(odd)} 个文件名含非断行空格(U+00A0)，建议重命名为普通空格：')
+        for f in odd:
+            print('  ', f)
+
     # 写入为全局 JS 变量，确保不使用智能引号（JSON 规范只认直双引号）
     try:
         content = 'window.__PLAYLIST__ = ' + json.dumps(files, ensure_ascii=False) + ';\n'
