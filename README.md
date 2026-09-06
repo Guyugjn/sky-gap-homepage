@@ -159,7 +159,7 @@ python generate_playlist.py
 
 本项目在开发、优化和代码审查过程中使用了以下 AI 工具辅助：
 
-- **Claude Code** — 代码编写、架构设计、代码审查、性能优化、文档生成
+- **Claude Code / DeepSeek Harness** — 代码编写、架构设计、代码审查、性能优化、文档生成
 - **DeepSeek** — 后端模型推理支持
 
 所有 AI 生成代码均经过人工审核和测试后合并。具体参与内容详见 [commit 记录](https://github.com/Guyugjn/sky-gap-homepage/commits/main)。
