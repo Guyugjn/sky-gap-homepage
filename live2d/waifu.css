@@ -57,7 +57,11 @@
 	box-shadow: 0 3px 15px 2px rgba(191, 158, 118, .2);
 	font-size: 14px;
 	line-height: 24px;
-	margin: -30px 20px;
+	/* 悬浮在人物头顶正上方，水平居中对准人物；抬高层级避免被 Live2D 人物遮住 */
+	bottom: calc(100% - 6px);
+	left: 0;
+	right: 0;
+	margin: 0 auto;
 	min-height: 70px;
 	opacity: 0;
 	overflow: hidden;
@@ -67,11 +71,21 @@
 	transition: opacity 1s;
 	width: 250px;
 	word-break: break-all;
+	z-index: 10;
 }
 
 #waifu-tips.waifu-tips-active {
 	opacity: 1;
 	transition: opacity .2s;
+	/* 弹跳入场 + 循环轻晃（入场动画每次气泡出现都重播） */
+	animation: waifu-pop .6s cubic-bezier(.34,1.56,.64,1), waifu-shake 50s ease-in-out 5s infinite;
+}
+
+@keyframes waifu-pop {
+	0% { opacity: 0; transform: translateY(12px) scale(.6); }
+	60% { opacity: 1; transform: translateY(-4px) scale(1.08); }
+	80% { transform: translateY(2px) scale(.97); }
+	100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 #waifu-tips span {

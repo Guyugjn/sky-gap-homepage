@@ -1029,6 +1029,15 @@
     if (!canvas || !section) return;
     var ctx = canvas.getContext('2d');
 
+    // 星空特效开关（用户设置）：关闭时连同流星/光束/庆祝粒子一并停用，但保留星座选择器与运势功能
+    var _fxStarfield = true;
+    try {
+      if (window.__gySettings) {
+        var _e = window.__gySettings.get().effects;
+        if (_e && typeof _e.starfield === 'boolean') _fxStarfield = _e.starfield;
+      }
+    } catch (_err) {}
+
     var W, H;
     var particles = [];       // 自由粒子
     var cNodes = [];          // 星座节点
@@ -1193,6 +1202,7 @@
      *  仅夜间模式（_canvasVisible）；替换式：新光束生成时清掉旧光束——
      *  任何时刻最多一条，避免多条线叠加。 */
     function spawnStarBeam(constIndex, gold) {
+      if (!_fxStarfield) return; // 星空特效关闭：不生成引导光束
       if (isMobileViewport()) return; // 手机端无引导光束
       if (!_canvasVisible) return; // 白天模式无星空背景：不生成光束（避免 starBeams 只增不减）
       if (constIndex < 0 || constIndex >= CONSTELLATIONS.length) return;
@@ -1310,6 +1320,7 @@
 
     /** 生成一颗流星 — 从画面上半区斜向划过 */
     function spawnMeteor() {
+      if (!_fxStarfield) return; // 星空特效关闭：不生成流星
       var startX = Math.random() * W * 1.2;
       meteors.push({
         x: startX,
@@ -1322,11 +1333,15 @@
       });
     }
 
-    /** 定时调度流星 — 每 2.5~7s 生成一颗，页面隐藏或白天模式跳过 */
+    var _meteorTimer = null;
+    /** 定时调度流星 — 每 2.5~7s 生成一颗，页面隐藏或白天模式跳过；受星空特效开关门控 */
     function scheduleMeteor() {
+      if (_meteorTimer) return;   // 已有调度，避免重复链
+      if (!_fxStarfield) return;  // 星空特效关闭：不启动流星调度
       var delay = 2500 + Math.random() * 4500;
-      setTimeout(function () {
-        if (!document.hidden && W > 0 && _canvasVisible) spawnMeteor();
+      _meteorTimer = setTimeout(function () {
+        _meteorTimer = null;
+        if (_fxStarfield && !document.hidden && W > 0 && _canvasVisible) spawnMeteor();
         scheduleMeteor();
       }, delay);
     }
@@ -1706,6 +1721,12 @@
 
     function tick(ts) {
       if (W <= 0 || H <= 0) return;
+      // 星空特效关闭：清空粒子/光束并停绘（保留星座选择器与运势功能）
+      if (!_fxStarfield) {
+        starBeams = [];
+        celebrateParticles = [];
+        return;
+      }
       if (!_sectionInView && celebrateParticles.length === 0) return;
       if (!_canvasVisible && celebrateParticles.length === 0) return;
       lerpTheme();
@@ -1745,6 +1766,14 @@
       window._registerTick(tick);
     }
     scheduleMeteor(); // 启动流星调度（动态点缀）
+    // 星空特效开关（供设置面板调用）：关闭清空粒子/光束，开启恢复流星调度
+    if (typeof window.__gyFx === 'object' && window.__gyFx && window.__gyFx.register) {
+      window.__gyFx.register('starfield', function (on) {
+        _fxStarfield = on;
+        if (!on) { starBeams = []; celebrateParticles = []; }
+        else { scheduleMeteor(); }
+      });
+    }
     // 防抖：resize 会触发 generate()（星点/粒子重建），窗口拖拽连续触发时合并为一次
     var _zodiacResizeTimer = null;
     window.addEventListener('resize', function () {

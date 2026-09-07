@@ -101,6 +101,31 @@
   }
   _globalLoop(0);
 
+  // ==================== 全局设置接口 — 供设置面板（js/settings.js）调度 ====================
+  // 各子系统通过 register 注册自己的特效开关 handler；settings.js 统一调 set(name, on) 触发。
+  // 主题 setter 由 initNightMode 挂到 window.__gyTheme.set；音乐 setter 挂在 window.__gyMusic。
+  window.__gyFx = {
+    _registry: {},
+    register: function (name, fn) { this._registry[name] = fn; },
+    set: function (name, on) {
+      var h = this._registry[name];
+      if (h) h(!!on);
+    }
+  };
+  window.__gyTheme = {};
+  window.__gyMusic = {};
+
+  /** 安全读取 gy_settings 中某分区布尔值（localStorage 禁用/缺省时返回 dflt） */
+  function _settingsBool(section, key, dflt) {
+    try {
+      if (window.__gySettings) {
+        var s = window.__gySettings.get();
+        if (s && s[section] && typeof s[section][key] === 'boolean') return s[section][key];
+      }
+    } catch (e) {}
+    return dflt;
+  }
+
   // ==================== DOM 引用 ====================
 
   const canvas = document.getElementById('particles-canvas');
@@ -256,6 +281,9 @@
     };
   }
 
+  // 暴露滑块工厂给设置面板（js/settings.js）复用 — 与音乐播放器音量条同款拖拽/键盘逻辑
+  window.__gyCreateSlider = createSlider;
+
   // ==================== 1. 光粒子系统 ====================
 
   function initParticles() {
@@ -264,6 +292,8 @@
     const ctx = canvas.getContext('2d');
     let particles = [];
     let w, h;
+    // 特效开关：关闭时清屏并停止绘制（省 GPU）
+    var _fxParticles = _settingsBool('effects', 'particles', true);
 
     function resize() {
       // DPR 缩放：canvas 物理像素 = CSS 像素 × devicePixelRatio，高分屏不再模糊
@@ -349,6 +379,8 @@
       if (_particleLastTs === null) _particleLastTs = time;
       var k = Math.min(Math.max(time - _particleLastTs, 0), 50) / 16.667;
       _particleLastTs = time;
+      // 特效开关：关闭时清屏并停止绘制（省 GPU）
+      if (!_fxParticles) { ctx.clearRect(0, 0, w, h); return; }
       ctx.clearRect(0, 0, w, h);
 
       for (let i = 0; i < particles.length; i++) {
@@ -381,6 +413,7 @@
 
     particles = createParticles();
     window._registerTick(draw);
+    window.__gyFx.register('particles', function (on) { _fxParticles = on; });
   }
 
   // ==================== 2. 飞鱼：自主漫游 + 鼠标吸引 ====================
@@ -392,6 +425,8 @@
 
     var pupil = cursorFish.querySelector('.fish-eye-pupil');
     var shine = cursorFish.querySelector('.fish-eye-shine');
+    // 特效开关：关闭时隐藏飞鱼并跳过绘制（省 compositor）
+    var _fxFish = _settingsBool('effects', 'fish', true);
 
     var FISH_SPEED = CONFIG.fish.speed;
     var IDLE_TIMEOUT = CONFIG.fish.idleTimeout;
@@ -408,6 +443,12 @@
     var _fishLastTs = null; // 上一帧时间戳 — 帧率归一化基准
 
     function update(ts) {
+      // 特效开关：关闭时隐藏飞鱼并跳过绘制（省 compositor）
+      if (!_fxFish) {
+        if (cursorFish.style.display !== 'none') cursorFish.style.display = 'none';
+        return;
+      }
+      if (cursorFish.style.display !== '') cursorFish.style.display = '';
       // 帧间隔折算 — 高刷屏(120/144Hz)速度一致（基准 60Hz），后台切回限制步长
       if (_fishLastTs === null) _fishLastTs = ts;
       var k = Math.min(Math.max(ts - _fishLastTs, 0), 50) / 16.667;
@@ -585,7 +626,8 @@
       document.body.appendChild(ripple);
       ripple.addEventListener('animationend', function () { ripple.remove(); });
 
-      // 鱼在范围内 → 弹飞
+      // 鱼在范围内 → 弹飞（关闭飞鱼特效时保留全局点击涟漪，但跳过逃跑）
+      if (!_fxFish) return;
       var dx = mouseX - e.clientX;
       var dy = mouseY - e.clientY;
       var dist = Math.sqrt(dx * dx + dy * dy);
@@ -606,12 +648,17 @@
     // 鼠标移动 → 记录活跃时间 + 更新目标位置（移动端跳过，只做自主漫游）
     document.addEventListener('mousemove', function (e) {
       if (isMobile) return;
+      if (!_fxFish) return;
       lastMouseActivity = Date.now();
       targetMouseX = e.clientX;
       targetMouseY = e.clientY;
     });
 
     window._registerTick(update);
+    window.__gyFx.register('fish', function (on) {
+      _fxFish = on;
+      if (cursorFish) cursorFish.style.display = on ? '' : 'none';
+    });
   }
 
   // ==================== 3. 音乐播放器 ====================
@@ -622,6 +669,14 @@
     // 从 playlist.js（<script> 标签加载）读取曲目列表
     var playlist = window.__PLAYLIST__ || [];
     var totalTracks = playlist.length;
+
+    // 从设置恢复播放模式（0=列表循环 1=单曲 2=随机，默认随机）
+    try {
+      if (window.__gySettings) {
+        var _m = window.__gySettings.get().music.mode;
+        if (_m === 0 || _m === 1 || _m === 2) playMode = _m;
+      }
+    } catch (_err) {}
 
     // 安全读取 localStorage：禁用存储（隐私模式/企业策略）时返回 null，避免中断 init 链
     function safeGet(key) {
@@ -971,6 +1026,8 @@
       updateModeUI();
       // 模式切换后重置预加载标记，让 progress 事件按新模式重新触发
       if (isPlaying) { preloadDone = false; preloadAudio.src = ''; }
+      // 持久化到设置（供刷新后恢复）
+      try { if (window.__gySettings) window.__gySettings.save({ music: { mode: playMode } }); } catch (_err) {}
     });
 
     // === 点击曲名复制曲名 ===
@@ -1391,6 +1448,36 @@
           break;
       }
     });
+
+    // === 设置面板接口：播放模式 / 音量（供 js/settings.js 调用） ===
+    window.__gyMusic.getMode = function () { return playMode; };
+    window.__gyMusic.setMode = function (m) {
+      playMode = ((m % 3) + 3) % 3;
+      playHistory = [];               // 切模式清空随机历史
+      updateModeUI();
+      // 模式切换后重置预加载标记，让 progress 事件按新模式重新触发
+      if (isPlaying) { preloadDone = false; preloadAudio.src = ''; }
+      try { if (window.__gySettings) window.__gySettings.save({ music: { mode: playMode } }); } catch (_err) {}
+    };
+    window.__gyMusic.getVolume = function () { return volume; };
+    window.__gyMusic.setVolume = function (v) {
+      v = Math.max(0, Math.min(1, v));
+      // 用户设置音量 → 取消淡入/淡出动画，避免逐帧回写覆盖拖拽值
+      if (fadeAnimId) { cancelAnimationFrame(fadeAnimId); fadeAnimId = null; }
+      if (_isMuted && v > 0.005) {
+        // 非零 → 视为主动取消静音
+        _isMuted = false;
+        _volumeBeforeMute = v;
+        try { localStorage.setItem('gy_muted', '0'); } catch (_err) {}
+      }
+      volume = v;
+      audio.volume = volume;
+      updateVolumeUI(volume);
+      try {
+        localStorage.setItem('gy_volume', v.toFixed(3));
+        if (v < 0.005) { _isMuted = true; _volumeBeforeMute = 0.05; localStorage.setItem('gy_muted', '1'); }
+      } catch (_err) {}
+    };
   }
 
   // ==================== 4. 云层鼠标视差 ====================
@@ -1399,6 +1486,13 @@
     var cloudsLayer = document.getElementById('clouds-layer');
     if (!cloudsLayer) return;
     var clouds = cloudsLayer.querySelectorAll('.cloud');
+    // 特效开关：关闭时隐藏云层。注册放最前——触摸设备虽跳过 parallax 逻辑，也要能隐藏（仅 display）
+    var _fxClouds = _settingsBool('effects', 'clouds', true);
+    cloudsLayer.style.display = _fxClouds ? '' : 'none';
+    window.__gyFx.register('clouds', function (on) {
+      _fxClouds = on;
+      if (cloudsLayer) cloudsLayer.style.display = on ? '' : 'none';
+    });
 
     // 触摸设备跳过（无 hover，mousemove 基本不触发），节省性能
     if (isTouchDevice) return;
@@ -1417,6 +1511,7 @@
     var lastOY = 0;
 
     document.addEventListener('mousemove', function (e) {
+      if (!_fxClouds) return;
       // 鼠标相对于屏幕中心的偏移 → 云层反向微移（视差感）
       lastOX = (e.clientX - centerX) / centerX; // -1 ~ 1
       lastOY = (e.clientY - centerY) / centerY; // -1 ~ 1
@@ -1457,25 +1552,16 @@
   }
 
   function initNightMode() {
-    var btn = document.getElementById('theme-toggle');
-    var iconPath = btn ? btn.querySelector('path') : null;
-
-    var ICON_SUN = 'M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z';
-    var ICON_MOON = 'M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z';
-
-    function updateIcon() {
-      if (!iconPath) return;
-      var isNight = document.documentElement.classList.contains('night-mode');
-      iconPath.setAttribute('d', isNight ? ICON_MOON : ICON_SUN);
-    }
-
-    // 同步按钮提示文案（手动/自动状态可见可感知）
-    function updateHead() {
-      if (!btn) return;
-      var label = _nightManual ? '已手动切换 · 点击恢复自动' : '切换日夜模式';
-      btn.title = label;
-      btn.setAttribute('aria-label', label);
-    }
+    // 初始主题从设置读取（默认 auto = 系统偏色 + 时间自动；day/night 为手动覆盖）
+    var initTheme = 'auto';
+    try {
+      if (window.__gySettings) {
+        var _t = window.__gySettings.get().theme;
+        if (_t === 'day' || _t === 'night' || _t === 'auto') initTheme = _t;
+      }
+    } catch (_err) {}
+    _nightManual = (initTheme === 'day' || initTheme === 'night');
+    if (_nightManual) applyNight(initTheme === 'night');
 
     function update() {
       if (_nightManual) return; // 手动模式覆盖自动
@@ -1483,29 +1569,27 @@
       var hour = new Date().getHours();
       var isNight = prefersDark || hour >= 19 || hour < 6;
       applyNight(isNight);
-      updateIcon();
-    }
-
-    if (btn) {
-      btn.addEventListener('click', function () {
-        if (_nightManual) {
-          // 再次点击 → 恢复自动模式（按系统偏色/时间重新计算，update 内会刷新图标）
-          _nightManual = false;
-          update();
-          showToast('🌗 已恢复自动日夜切换', 2000);
-        } else {
-          _nightManual = true;
-          applyNight(!document.documentElement.classList.contains('night-mode'));
-          updateIcon();
-        }
-        updateHead();
-      });
     }
 
     update();
-    updateHead();
     // 每分钟检查一次
     setInterval(update, 60000);
+
+    // 暴露主题 setter 供设置面板（js/settings.js）调用，并持久化到 gy_settings
+    window.__gyTheme.set = function (theme) {
+      if (theme === 'auto') {
+        _nightManual = false;
+        update();
+        showToast('🌗 已恢复自动日夜切换', 2200);
+      } else {
+        _nightManual = true;
+        applyNight(theme === 'night');
+        showToast(theme === 'night' ? '🌙 已切换到夜间模式' : '☀️ 已切换到日间模式', 2200);
+      }
+      try {
+        if (window.__gySettings) window.__gySettings.save({ theme: theme });
+      } catch (_err) {}
+    };
   }
 
   // ==================== 6. 社交按钮提示 ====================

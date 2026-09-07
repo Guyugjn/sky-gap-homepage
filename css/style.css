@@ -2493,3 +2493,234 @@ html.night-mode .playlist-inner::-webkit-scrollbar-thumb {
   background: rgba(140, 180, 210, 0.25);
 }
 
+/* ============================================
+   设置面板（#settings-toggle → #settings-overlay）
+   ============================================ */
+
+/* 遮罩层 */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 42, 61, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition-fast), visibility var(--transition-fast);
+}
+.settings-overlay.open { opacity: 1; visibility: visible; }
+
+/* 面板卡片 */
+.settings-panel {
+  width: min(420px, 100%);
+  max-height: min(80vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 22px;
+  box-shadow: 0 18px 48px rgba(15, 42, 61, 0.22);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+  transform: translateY(12px) scale(0.98);
+  transition: transform var(--transition-fast);
+}
+.settings-overlay.open .settings-panel { transform: translateY(0) scale(1); }
+
+/* 头部 */
+.settings-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 20px 12px;
+}
+.settings-title {
+  margin: 0;
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-cn);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+.settings-close {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+.settings-close:hover { background: var(--accent); color: #fff; transform: translateY(-50%) rotate(90deg); }
+.settings-close:focus-visible,
+.settings-toggle input:focus-visible + .toggle-track {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+/* 主体 */
+.settings-body {
+  padding: 4px 20px 20px;
+  overflow-y: auto;
+}
+
+/* 分区 */
+.settings-section { margin-top: 18px; }
+.settings-section-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+/* 分段选择器（主题 / 播放模式） */
+.settings-seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--accent-soft);
+  border-radius: 12px;
+}
+.seg-btn {
+  flex: 1;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.seg-btn:hover { color: var(--text-primary); }
+.seg-btn[aria-checked="true"] {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(15, 42, 61, 0.12);
+}
+
+/* 音乐模式/音量行 */
+.settings-mode,
+.settings-volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.settings-mode .settings-seg { flex: 1; }
+.settings-seg--sm .seg-btn { padding: 6px 4px; font-size: 0.84rem; }
+.settings-mode-label {
+  flex-shrink: 0;
+  width: 68px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* 开关 */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.settings-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 42px;
+  height: 24px;
+  border-radius: 24px;
+  background: rgba(110, 144, 160, 0.35);
+  transition: background var(--transition-fast);
+}
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 42, 61, 0.3);
+  transition: transform var(--transition-fast);
+}
+.settings-toggle input:checked + .toggle-track { background: var(--accent-hover); }
+.settings-toggle input:checked + .toggle-track::after { transform: translateX(18px); }
+.toggle-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* 夜间适配 */
+html.night-mode .settings-panel {
+  background: rgba(20, 38, 60, 0.82);
+  border-color: rgba(90, 130, 170, 0.35);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+}
+html.night-mode .settings-title { color: #E8EFF6; }
+html.night-mode .settings-section-title { color: #DCE7F2; }
+html.night-mode .settings-close { background: rgba(90, 140, 190, 0.2); color: var(--text-secondary); }
+html.night-mode .settings-close:hover { background: var(--accent-hover); }
+html.night-mode .seg-btn { color: var(--text-secondary); }
+html.night-mode .seg-btn:hover { color: var(--text-primary); }
+html.night-mode .seg-btn[aria-checked="true"] {
+  background: rgba(70, 110, 155, 0.5);
+  color: #E8EFF6;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+html.night-mode .settings-mode-label { color: var(--text-muted); }
+html.night-mode .toggle-track { background: rgba(90, 120, 150, 0.4); }
+html.night-mode .toggle-label { color: var(--text-secondary); }
+html.night-mode .settings-overlay { background: rgba(4, 12, 22, 0.5); }
+
+/* 面板内提示条 */
+.settings-notice {
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.settings-notice.show { opacity: 1; transform: translateY(0); }
+html.night-mode .settings-notice { color: #DCE7F2; }
+
+/* 移动端适配 */
+@media (max-width: 480px) {
+  .settings-panel { width: 100%; max-height: 86vh; border-radius: 18px; }
+  .settings-body { padding: 2px 16px 16px; }
+}
+

@@ -65,6 +65,8 @@
   <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
   <script defer src="assets/music/playlist.js"></script>
   <script defer src="assets/twemoji.min.js"></script>
+  <!-- settings.js 先于 main.js 执行，优先定义 __gySettings 存储（供各模块 init 读取默认值） -->
+  <script defer src="js/settings.js"></script>
   <script defer src="js/main.js"></script>
   <script defer src="js/zodiac.js"></script>
   <script defer src="live2d/autoload.js"></script>
@@ -207,14 +209,14 @@
         </button>
         <span class="social-tip">点击复制邮箱</span>
       </div>
-      <!-- 日夜切换 -->
+      <!-- 设置 -->
       <div class="tip-wrap">
-        <button class="social-link" id="theme-toggle" title="切换日夜模式" aria-label="切换日夜模式">
+        <button class="social-link" id="settings-toggle" title="打开设置" aria-label="打开设置">
           <svg viewBox="0 0 24 24" class="social-icon">
-            <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
           </svg>
         </button>
-        <span class="social-tip">切换日夜模式</span>
+        <span class="social-tip">打开设置</span>
       </div>
     </div>
 
@@ -375,6 +377,60 @@
 
   <!-- 复制提示气泡（aria-live：读屏播报） -->
   <div class="toast" id="toast" role="status" aria-live="polite">📋 邮箱已复制</div>
+
+  <!-- 设置面板（由 #settings-toggle 打开；毛玻璃卡片，样式见 css/style.css） -->
+  <div class="settings-overlay" id="settings-overlay" hidden>
+    <div class="settings-panel" id="settings-panel" role="dialog" aria-modal="true" aria-label="设置">
+      <div class="settings-header">
+        <h2 class="settings-title">设置</h2>
+        <button type="button" class="settings-close" id="settings-close" aria-label="关闭设置">✕</button>
+      </div>
+      <div class="settings-body">
+        <!-- 主题 -->
+        <section class="settings-section">
+          <h3 class="settings-section-title">🌗 主题</h3>
+          <div class="settings-seg" id="settings-theme" role="radiogroup" aria-label="主题模式">
+            <button type="button" class="seg-btn" data-theme="auto" role="radio" aria-checked="true">自动</button>
+            <button type="button" class="seg-btn" data-theme="day" role="radio" aria-checked="false">白天</button>
+            <button type="button" class="seg-btn" data-theme="night" role="radio" aria-checked="false">夜间</button>
+          </div>
+        </section>
+
+        <!-- 视觉特效 -->
+        <section class="settings-section">
+          <h3 class="settings-section-title">✨ 视觉特效</h3>
+          <label class="settings-toggle"><input type="checkbox" data-effect="particles" checked><span class="toggle-track"></span><span class="toggle-label">光粒子</span></label>
+          <label class="settings-toggle"><input type="checkbox" data-effect="fish" checked><span class="toggle-track"></span><span class="toggle-label">飞鱼</span></label>
+          <label class="settings-toggle"><input type="checkbox" data-effect="clouds" checked><span class="toggle-track"></span><span class="toggle-label">云层</span></label>
+          <label class="settings-toggle"><input type="checkbox" data-effect="starfield" checked><span class="toggle-track"></span><span class="toggle-label">星空</span></label>
+        </section>
+
+        <!-- 音乐 -->
+        <section class="settings-section">
+          <h3 class="settings-section-title">🎵 音乐</h3>
+          <div class="settings-mode">
+            <span class="settings-mode-label">播放模式</span>
+            <div class="settings-seg settings-seg--sm" id="settings-mode" role="radiogroup" aria-label="播放模式">
+              <button type="button" class="seg-btn" data-mode="0" role="radio" aria-checked="false">列表</button>
+              <button type="button" class="seg-btn" data-mode="1" role="radio" aria-checked="false">单曲</button>
+              <button type="button" class="seg-btn" data-mode="2" role="radio" aria-checked="false">随机</button>
+            </div>
+          </div>
+          <div class="settings-volume">
+            <span class="settings-mode-label">音量</span>
+            <div class="volume-bar-wrap" id="settings-volume-bar" role="slider" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" tabindex="0"><div class="volume-fill" id="settings-volume-fill"></div></div>
+            <span class="volume-pct" id="settings-volume-val">20%</span>
+          </div>
+        </section>
+
+        <!-- 看板娘 -->
+        <section class="settings-section">
+          <h3 class="settings-section-title">🎀 看板娘</h3>
+          <label class="settings-toggle"><input type="checkbox" data-live2d checked><span class="toggle-track"></span><span class="toggle-label">显示看板娘</span></label>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <script>
     /* Twemoji 加载完成后解析页面中所有 emoji

@@ -15,6 +15,7 @@ index.html              — 入口（SEO、OG、JSON-LD、Twemoji）
 css/style.css           — 全部样式（CSS 变量 + 响应式）
 js/main.js              — 全局 rAF 调度、光粒子、飞鱼、音乐播放器、日夜切换、访客统计
 js/zodiac.js            — 星座运势、星轨生日选择器、星空 Canvas、烟花动效
+js/settings.js          — 设置面板（gy_settings 存储、齿轮按钮、毛玻璃面板、主题/特效/音乐/看板娘）
 generate_playlist.py    — 扫描 assets/music/ 生成 playlist.js（含 U+00A0 文件名警告）
 release/                — 构建输出目录（部署打包用，git 不跟踪，勿删）
 live2d/                 — 看板娘（autoload.js + SDK + 双模型）
@@ -32,6 +33,18 @@ web.config              — IIS 缓存策略 + 安全头（CSP/HSTS 已启用）
 ```
 
 ## 核心架构
+
+### 设置面板（`js/settings.js`）
+
+统一设置入口——把社交栏原「日夜切换」按钮替换为齿轮设置按钮（`#settings-toggle`），点击弹出毛玻璃面板（`#settings-overlay`）。所有偏好持久化到单一键 `gy_settings`（JSON）：
+`{ theme, effects:{particles,fish,clouds,starfield}, music:{mode}, live2d }`
+
+- 跨模块接口（main.js/zodiac.js/autoload.js 各自暴露，settings.js 统一调度）：
+  - `window.__gySettings.get()/save(patch)`：存储读写，`deepMerge` 深浅合并保证单键改动不丢其他键。
+  - `window.__gyTheme.set(theme)`（'auto'/'day'/'night'）：驾 `_nightManual` + `applyNight` + 持久化；重置初始值也从设置读取。**社交栏不再有独立日夜按钮**。
+  - `window.__gyFx`（`register(name,fn)` / `set(name,on)`）：视觉特效开关注册表。main.js 注册 particles/fish/clouds，zodiac.js 注册 starfield。
+  - `window.__gyMusic`（`getMode/setMode/getVolume/setVolume`）：播放模式与音量，主播放器 modeBtn 切换也持久化到 `gy_settings.music.mode`；音量仍走现有 `gy_volume`/`gy_muted` 存储（不迁移）。设置面板音量条**复用 main.js 的 `createSlider` 工厂**（暴露为 `window.__gyCreateSlider`），与音乐播放器音量条同款拖拽/键盘逻辑 + `.volume-bar-wrap/.volume-fill/.volume-pct` 样式。
+  - `window.__gyWaifu`（`set(on)/getLoaded()`）：控制 live2d-widget 根容器 `#waifu` 显隐；`initLive2D` 读取 `gy_settings.live2d`，为 false 时跳过加载（省 ~2.6MB）。
 
 ### 全局 rAF 调度（`main.js` `_globalLoop`）
 
@@ -90,3 +103,10 @@ SVG 飞鱼三种模式（漫游/追逐光标/受惊逃跑），`transform: trans
 - **运势 Tab 用 aria-pressed**：`initFortune` / `setFortuneSign` 两处切换时同步（for 循环遍历，勿用 NodeList.forEach——兼容旧浏览器）。
 - **mp3 文件名不得含 U+00A0**：`generate_playlist.py` 会警告非断行空格文件；新增曲目先检查。
 - **web.config 已启用 CSP**：允许内联脚本/样式 + jsdelivr + v2.xxapi.cn；**不得添加 upgrade-insecure-requests**（源站服务在 HTTP 上，会强制升级子资源导致页面损坏）。HSTS 头仅未来 HTTPS 回源时生效。
+- **设置脚本顺序**：`js/settings.js` 必须置于 `main.js` 之前（defer 按序执行），各模块 init 才能读到 `__gySettings` 默认值；面板打开（用户点击）晚于所有 init，可安全调用各 setter。
+- **settings.js 时序坑**：defer 脚本执行时 `document.readyState` 已是 `'interactive'`（非 `'loading'`），`settings.js` 的 `initSettings()` 会**立即执行**、早于 `main.js` 的 `init()`。凡在 initSettings 里**立即用到 `window.__gyCreateSlider/__gyMusic/__gyFx/__gyWaifu/__gyTheme` 的绑定必须「在用户交互/首次打开面板时」懒绑定**（如音量条 `bindVolumeSlider()`），否则工厂未定义、绑定被跳过；事件回调（click/change）因执行晚不受影响。
+- **星空特效开关**：`_fxStarfield` 与 `_canvasVisible`（夜间才显示）做「与」运算；关闭星空会连流星/引导光束/庆祝粒子一并清空，但保留星座选择器与运势功能。
+- **看不到活看板娘开/关**：`__gyWaifu.set(true)` 时若 `getLoaded()` 为 false（初始被跳过）需提示刷新生效；live2d-widget 重复 init 有竞态风险，不强行二次初始化。
+- **看板娘气泡本地定制（更新 live2d-widget 时须保留）**：
+  - `live2d/waifu.css` → `#waifu-tips`：加 `z-index:10` + `bottom:calc(100% - 6px); left:0; right:0; margin:0 auto`，让气泡悬浮在人物头顶正上方、不被 Live2D 人物遮挡。
+  - `live2d/waifu-tips.js` → mouseover 委托里注入 `window._waifuLastTip` 1000ms 防抖（`if(window._waifuLastTip&&(performance.now()-window._waifuLastTip)<1000)return`），避免快速扫过不同 selector 时气泡内容乱跳。此文件是压缩三方库，改动最小化且已备份（`%TEMP%\waifu-tips.backup.js`）。

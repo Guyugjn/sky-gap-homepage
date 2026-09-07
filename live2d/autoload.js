@@ -38,47 +38,15 @@ const waifuTipsData = {
     },
     {
       "selector": ".social-link",
-      "text": ["要一起去外面的世界看看吗？", "话说，你关注孤鱼了吗？", "外面的世界很大，但这里永远是你的港湾"]
+      "text": ["要一起去外面的世界看看吗？", "话说，你关注孤鱼了吗？", "外面的世界很大，但这里永远是你的港湾", "代码是另一种魔法呢", "这里藏着很多小秘密哦", "绿色的格子，是最美的色块", "B站是个温暖的地方~", "你投币了吗？", "一键三连，懂的都懂", "想写信给孤鱼吗？", "点击就能复制邮箱哦", "写信是一件很浪漫的事呢", "点开设置，定制属于你的天空", "日夜、特效、音乐，都能在这里调", "齿轮一转，天空由你说了算"]
     },
     {
-      "selector": "#github-btn",
-      "text": ["代码是另一种魔法呢", "这里藏着很多小秘密哦", "绿色的格子，是最美的色块"]
-    },
-    {
-      "selector": "#bilibili-btn",
-      "text": ["B站是个温暖的地方~", "你投币了吗？", "一键三连，懂的都懂"]
-    },
-    {
-      "selector": "#email-btn",
-      "text": ["想写信给孤鱼吗？", "点击就能复制邮箱哦", "写信是一件很浪漫的事呢"]
-    },
-    {
-      "selector": "#theme-toggle",
-      "text": ["白天和夜晚，天空的颜色完全不同呢", "你喜欢白天的天空还是夜晚的星空？"]
-    },
-    {
-      "selector": ".music-label",
-      "text": ["点击曲名可以复制哦", "音乐是天空之隙里流淌的风", "这首歌是我的最爱之一"]
-    },
-    {
-      "selector": "#music-btn",
-      "text": ["这首歌好听吗？", "闭上眼睛，让音乐带你飞翔", "播放、暂停、切歌——都由你掌控"]
+      "selector": ".music-player",
+      "text": ["点击曲名可以复制哦", "音乐是天空之隙里流淌的风", "这首歌是我的最爱之一", "这首歌好听吗？", "闭上眼睛，让音乐带你飞翔", "播放、暂停、切歌——都由你掌控"]
     },
     {
       "selector": ".zodiac-card",
-      "text": ["星辰絮语，聆听宇宙的低语", "你也相信星星的指引吗？", "十二星座各有各的魅力呢"]
-    },
-    {
-      "selector": ".countdown-card",
-      "text": ["孤鱼的生日是3月22日，记得来祝福哦", "白羊座的热情，就像初春的阳光", "距离生日还有多久呢？"]
-    },
-    {
-      "selector": ".fortune-card",
-      "text": ["今天的运势如何？", "星星会告诉你答案 ✨", "运势只是参考，真正的运气在自己手里"]
-    },
-    {
-      "selector": ".query-card",
-      "text": ["想知道你的星座秘密吗？", "选择生日，发现属于你的星辰", "不管什么星座，在这里都是好朋友"]
+      "text": ["星辰絮语，聆听宇宙的低语", "你也相信星星的指引吗？", "十二星座各有各的魅力呢", "孤鱼的生日是3月22日，记得来祝福哦", "白羊座的热情，就像初春的阳光", "距离生日还有多久呢？", "今天的运势如何？", "星星会告诉你答案 ✨", "运势只是参考，真正的运气在自己手里", "想知道你的星座秘密吗？", "选择生日，发现属于你的星辰", "不管什么星座，在这里都是好朋友"]
     },
     {
       "selector": ".site-footer",
@@ -240,6 +208,16 @@ function loadExternalResource(url, type) {
   function initLive2D() {
     if (screen.width < 768) { return; }
 
+    // 看板娘开关：用户关闭则不加载任何 Live2D 资源（省 ~127K JS + 2.6MB 纹理）
+    var _live2dOn = true;
+    try {
+      if (window.__gySettings) {
+        var _l = window.__gySettings.get().live2d;
+        if (typeof _l === 'boolean') _live2dOn = _l;
+      }
+    } catch (_err) {}
+    if (!_live2dOn) return;
+
     // 静默 Live2D 初始化期间的 hitTest 竞态错误（纹理未就绪时鼠标事件触发）
     window.addEventListener('error', function suppressLive2DRace(e) {
       if (e.message && e.message.includes('hitTest')) {
@@ -277,3 +255,15 @@ function loadExternalResource(url, type) {
   } else {
     setTimeout(initLive2D, 2000);
   }
+
+  // 看板娘显隐控制接口（供设置面板 js/settings.js 调用）
+  // 根容器为 live2d-widget 创建的 #waifu；未加载（跳过 initWidget）时 getLoaded() 返回 false
+  window.__gyWaifu = {
+    set: function (on) {
+      var el = document.getElementById('waifu');
+      if (el) el.style.display = on ? '' : 'none';
+    },
+    getLoaded: function () {
+      return !!document.getElementById('waifu');
+    }
+  };
