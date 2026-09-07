@@ -109,4 +109,5 @@ SVG 飞鱼三种模式（漫游/追逐光标/受惊逃跑），`transform: trans
 - **看不到活看板娘开/关**：`__gyWaifu.set(true)` 时若 `getLoaded()` 为 false（初始被跳过）需提示刷新生效；live2d-widget 重复 init 有竞态风险，不强行二次初始化。
 - **看板娘气泡本地定制（更新 live2d-widget 时须保留）**：
   - `live2d/waifu.css` → `#waifu-tips`：加 `z-index:10` + `bottom:calc(100% - 6px); left:0; right:0; margin:0 auto`，让气泡悬浮在人物头顶正上方、不被 Live2D 人物遮挡。
-  - `live2d/waifu-tips.js` → mouseover 委托里注入 `window._waifuLastTip` 1000ms 防抖（`if(window._waifuLastTip&&(performance.now()-window._waifuLastTip)<1000)return`），避免快速扫过不同 selector 时气泡内容乱跳。此文件是压缩三方库，改动最小化且已备份（`%TEMP%\waifu-tips.backup.js`）。
+  - `live2d/waifu-tips.js` → mouseover 委托里注入 `window._waifuLastTip` 500ms 防抖（`if(window._waifuLastTip&&(performance.now()-window._waifuLastTip)<500)return`），避免快速扫过不同 selector 时气泡内容乱跳。此文件是压缩三方库，改动最小化且已备份（`%TEMP%\waifu-tips.backup.js`）。
+  - `live2d/autoload.js` → `initLive2D()` 内注册 **window 捕获阶段 mouseover 节流**（`_waifuMouseThrottle`，500ms，`e.stopImmediatePropagation()` 吞掉命中 selector 的快速连续 hover）：**这是 `file://` 下的兜底**——该协议下 waifu-tips.js 因 ES module CORS 回退 CDN，本地注入的防抖不生效，必须靠 autoload.js 的捕获拦截（两种协议都加载）。改节流窗口时两处须同步。

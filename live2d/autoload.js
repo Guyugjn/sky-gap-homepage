@@ -218,6 +218,23 @@ function loadExternalResource(url, type) {
     } catch (_err) {}
     if (!_live2dOn) return;
 
+    // 气泡节流：鼠标快速扫过多个悬停区域时，气泡内容不应高频跳变。
+    // 在 window 捕获阶段拦截（先于 waifu-tips.js 内部的 mouseover 监听），
+    // 距上次放行不足 500ms 的命中事件直接吞掉。
+    // file:// 下 waifu-tips.js 走 CDN（无内置防抖），此拦截保证两种场景行为一致。
+    window.addEventListener('mouseover', function throttleWaifuTip(e) {
+      var hit = waifuTipsData.mouseover.some(function (m) {
+        return e.target && e.target.closest && e.target.closest(m.selector);
+      });
+      if (!hit) return;
+      var now = performance.now();
+      if (window._waifuMouseThrottle && now - window._waifuMouseThrottle < 500) {
+        e.stopImmediatePropagation();
+        return;
+      }
+      window._waifuMouseThrottle = now;
+    }, true);
+
     // 静默 Live2D 初始化期间的 hitTest 竞态错误（纹理未就绪时鼠标事件触发）
     window.addEventListener('error', function suppressLive2DRace(e) {
       if (e.message && e.message.includes('hitTest')) {
