@@ -23,7 +23,14 @@ SVG 宫崎骏风格飞鱼，三种行为模式：
 - 播放列表动量滚动（桌面惯性滚动 / 移动端原生触摸滚动）
 - 智能预加载下一首
 - **键盘快捷键**：空格播放/暂停、左右切歌、上下调音量；聚焦进度条/音量条时方向键微调、Home/End 跳首尾
-- 音量与静音状态持久化到 localStorage（刷新后保留音量/静音，静音可一键恢复）
+- 播放模式、音量与静音状态持久化到 localStorage（刷新后保留；静音可一键恢复）
+
+### ⚙️ 设置面板
+社交栏齿轮按钮打开的毛玻璃设置面板，所有偏好持久化到 localStorage（`gy_settings`）：
+- **主题**：自动（跟随系统 + 时间）/ 日间 / 夜间
+- **视觉特效开关**：光粒子 / 飞鱼 / 云层 / 星空
+- **音乐**：播放模式（列表循环 / 单曲 / 随机）+ 音量（复用播放器同款拖拽/键盘滑块）
+- **看板娘**：显示 / 隐藏（关闭后不再加载 Live2D 资源）
 
 ### 🔮 星座运势
 
@@ -46,8 +53,8 @@ SVG 宫崎骏风格飞鱼，三种行为模式：
 
 - **白天**：浅蓝天空 + 星轨生日选择器（确认时绽放庆祝粒子）
 - **夜间**：深蓝星空 + 星轨（夜间皮肤）+ 星座连线光效
-- 自动切换（19:00–06:00，跟随系统 prefers-color-scheme）+ 手动覆盖
-- 手动切换后再点一次按钮即可恢复自动模式（按钮标题/aria-label 同步提示当前状态）
+- 自动切换（19:00–06:00，跟随系统 prefers-color-scheme）+ 手动覆盖（在设置面板选择「日间/夜间」）
+- 设置面板选择「自动」即可恢复自动切换
 - 颜色主题 CSS 变量渐变过渡
 
 ### 🌠 星空粒子系统
@@ -61,9 +68,11 @@ SVG 宫崎骏风格飞鱼，三种行为模式：
 右下角可交互的看板娘，支持双模型：
 - **Izumi**（完整模型，含表情/动作/音效）
 - **Pio**（简化模型）
+- 气泡悬浮在头顶正上方，悬停内容切换带节流（快速扫过不闪变）
 
 ### ♿ 无障碍
-- 所有按钮含 aria-label（主题切换按钮的文案随手动/自动状态更新）
+- 所有按钮含 aria-label（设置齿轮按钮、社交按钮、音乐控制等）
+- 设置面板分段选择（主题/播放模式）用 aria-checked 标记选中态
 - 进度条/音量条含 ARIA slider 属性，且**支持键盘操作**（方向键 ±步进、Home/End 首尾）
 - 曲名可点击复制（原生 button 语义，键盘可达）
 - 运势时间 Tab 含 aria-pressed 选中态；加载/错误/Toast 提示对读屏播报
@@ -81,11 +90,15 @@ SVG 宫崎骏风格飞鱼，三种行为模式：
 │   └── style.css           # 全部样式（CSS 变量 + 响应式）
 ├── js/
 │   ├── main.js             # 全局调度、光粒子、飞鱼、音乐播放器、日夜切换
+│   ├── settings.js         # 设置面板（gy_settings 存储、主题/特效/音乐/看板娘开关）
 │   └── zodiac.js           # 星座运势、星轨生日选择器、星空 Canvas、烟花动效
 ├── live2d/                 # Live2D 看板娘（Izumi + Pio）
-│   ├── autoload.js
+│   ├── autoload.js         # 入口：加载 waifu-tips.js、内联提示语配置、节流
+│   ├── waifu-tips.js       # 提示气泡逻辑（本地定制：气泡位置 + 悬停防抖）
 │   ├── live2d.min.js       # Cubism 2.x SDK
 │   ├── waifu.css
+│   ├── chunk/              # waifu-tips.js 依赖的 ES module 分块
+│   ├── models/             # Izumi / Pio 模型文件
 │   └── web.config          # .moc/.mtn MIME 映射
 ├── assets/
 │   ├── avatar.jpg
@@ -121,6 +134,10 @@ python generate_playlist.py
 
 > ⚠️ **GitHub Pages 不是完整部署**：`.gitignore` 排除了 `assets/music/`（约 178MB）、`assets/twemoji-72x72/`、`robots.txt`、`sitemap.xml`。Pages 只适合代码展示/预览——音乐播放、Twemoji 本地图标、SEO 收录需要把以上资源随站托管（rebuild 播放列表 `python generate_playlist.py` 后一并上传）。`release/` 是构建输出目录（git 不跟踪），部署打包时直接整体拷贝。
 
+### 📦 发布 Release
+
+版本包存放在 `release/`（git 不跟踪），已发布：`sky-gap-v1.0.0.zip`、`sky-gap-v1.1.0.zip`、`sky-gap-v1.2.0.zip`（各约 190MB，含音乐/Twemoji/SEO 文件，为完整部署包）。发布到 GitHub Releases 时拖拽上传 zip 即可（>100MB 建议用 `gh release upload` 或 API）。
+
 ---
 
 ## ⚙️ 技术栈
@@ -130,7 +147,7 @@ python generate_playlist.py
 | 框架 | 无（纯原生） |
 | 样式 | CSS 变量 + Flexbox + Grid + Backdrop-filter |
 | 动画 | CSS @keyframes + requestAnimationFrame |
-| 存储 | localStorage |
+| 存储 | localStorage（`gy_settings` 设置 + `gy_volume`/`gy_muted` 音量 + `gy_visit` 访客） |
 | 模型 | Cubism 2.x Live2D SDK |
 | 图标 | 内联 SVG |
 | Emoji | Twemoji（HTTPS 走 CDN，HTTP 走本地 `twemoji-72x72/`） |

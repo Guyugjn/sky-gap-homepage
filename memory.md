@@ -17,8 +17,8 @@ js/main.js              — 全局 rAF 调度、光粒子、飞鱼、音乐播�
 js/zodiac.js            — 星座运势、星轨生日选择器、星空 Canvas、烟花动效
 js/settings.js          — 设置面板（gy_settings 存储、齿轮按钮、毛玻璃面板、主题/特效/音乐/看板娘）
 generate_playlist.py    — 扫描 assets/music/ 生成 playlist.js（含 U+00A0 文件名警告）
-release/                — 构建输出目录（部署打包用，git 不跟踪，勿删）
-live2d/                 — 看板娘（autoload.js + SDK + 双模型）
+release/                — 构建输出目录（部署打包用，git 不跟踪，勿删）；已发布 sky-gap-v1.0.0/1.1.0/1.2.0.zip
+live2d/                 — 看板娘（autoload.js 入口 + waifu-tips.js + chunk/ + SDK + 双模型）
 assets/                 — 头像、apple-touch-icon、og-image、favicon、Twemoji 库、字体、音乐
 web.config              — IIS 缓存策略 + 安全头（CSP/HSTS 已启用）+ 压缩；live2d/web.config 注册 .moc/.mtn MIME
 
@@ -30,7 +30,6 @@ web.config              — IIS 缓存策略 + 安全头（CSP/HSTS 已启用）
 - **更新字体分片流程**：从 jsDelivr `@fontsource/ma-shan-zheng@5.2.9/400.css` 复制 unicode-range 块 → 下载对应 `files/ma-shan-zheng-{N}-400-normal.woff2` → 丢弃 woff 只留 woff2 → 更新本地 CSS。
 - **index.html 无需 preload 字体文件**（分片后浏览器自动按需），只保留 CSS preload + avatar preload；API 域名 v2.xxapi.cn 有 `dns-prefetch`。
 - **性能预算**：首屏约 22 分片 ~1.6MB（原整包 2.6MB），全站交互后约 44 分片 ~2.2MB。
-```
 
 ## 核心架构
 
@@ -99,7 +98,7 @@ SVG 飞鱼三种模式（漫游/追逐光标/受惊逃跑），`transform: trans
 - **播放列表移动端滚动**：`scrollToListIndex` 在触屏直接赋值 `scrollTop` 并 return，禁止 rAF 弹簧循环（否则持续写 scrollTop 会与原生触摸滚动打架，列表拖不动）。打开列表时移动端不做定位跳转；`openPlaylist` 必须先加 `.open` 再渲染——折叠态（max-height:0）写 scrollTop 在 iOS 会破坏原生滚动导致列表卡死。`createSlider` 须绑 `touchcancel` 复位 `dragging`，防系统取消触摸后 preventDefault 卡死整页滚动。
 - **访客统计（`initVisitor`）按本地时区换日**：日期键 = `YYYYMMDD` 整数（`getLocalDayKey`），**禁用 UTC 换日**——UTC+8 用户 00:00–07:59 的访问会被归到前一天。
 - **光粒子 DPR 上限 2**：`initParticles` 与星空 Canvas 一致，`Math.min(dpr, 2)`。
-- **手动日夜模式可恢复**：`_nightManual` 为 true 时再次点击按钮恢复自动；按钮 title/aria-label 由 `updateHead()` 同步（"已手动切换 · 点击恢复自动"）。
+- **手动日夜模式可恢复**：`_nightManual` 为 true 时，设置面板主题段选「自动」→ `__gyTheme.set('auto')` 置 `_nightManual=false` 并 `update()`（toast「已恢复自动日夜切换」）。`updateHead()` 已删除——社交栏不再有独立日夜按钮，主题切换全部走设置面板。
 - **运势 Tab 用 aria-pressed**：`initFortune` / `setFortuneSign` 两处切换时同步（for 循环遍历，勿用 NodeList.forEach——兼容旧浏览器）。
 - **mp3 文件名不得含 U+00A0**：`generate_playlist.py` 会警告非断行空格文件；新增曲目先检查。
 - **web.config 已启用 CSP**：允许内联脚本/样式 + jsdelivr + v2.xxapi.cn；**不得添加 upgrade-insecure-requests**（源站服务在 HTTP 上，会强制升级子资源导致页面损坏）。HSTS 头仅未来 HTTPS 回源时生效。
