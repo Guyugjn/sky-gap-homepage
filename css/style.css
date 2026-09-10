@@ -705,7 +705,8 @@ body {
   transition: max-height 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
 .music-playlist.open {
-  max-height: 175px;
+  /* 42px 为列表滚动区之上的标签栏 + 提示条预留高度 */
+  max-height: calc(175px + 42px);
 }
 
 /* 列表分隔线 */
@@ -744,6 +745,102 @@ body {
 .playlist-inner::-webkit-scrollbar-thumb {
   background: rgba(137, 196, 225, 0.35);
   border-radius: 4px;
+}
+
+/* ---- 本地音乐提示条（位于标签栏与列表之间，仅本地标签下显示） ---- */
+.playlist-local {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* 降级环境提示（仅本次浏览有效） */
+.playlist-local-hint {
+  margin: 0;
+  padding: 0 0.9rem 0.4rem;
+  font-size: 0.6rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+  opacity: 0.9;
+}
+
+/* ---- 列表切换标签页 ---- */
+.playlist-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.4rem 0.7rem 0.15rem;
+  flex-shrink: 0;
+}
+.playlist-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  padding: 0.32rem 0.4rem;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font-family: inherit;
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.playlist-tab:hover {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+.playlist-tab[aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-weight: 500;
+}
+.playlist-tab-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+.playlist-tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.playlist-tab-count {
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
+
+/* 空列表引导按钮（本地列表为空时的主要入口） */
+.playlist-cta {
+  display: block;
+  width: calc(100% - 1.4rem);
+  margin: 0.3rem 0.7rem 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px dashed var(--accent-hover);
+  border-radius: 10px;
+  background: none;
+  font-family: inherit;
+  font-size: 0.7rem;
+  color: var(--accent-hover);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+.playlist-cta:hover {
+  background: var(--accent-soft);
+}
+.playlist-cta-hint {
+  display: block;
+  margin: 0 0.7rem 0.5rem;
+  font-size: 0.6rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 /* 列表项 */
@@ -814,6 +911,19 @@ body {
 .playlist-item.current .pl-index {
   color: var(--accent-hover);
   opacity: 0.8;
+}
+
+/* 仅供辅助技术/程序读取的隐藏元素 */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ---- 曲名行改为横向 flex 容纳按钮 ---- */
@@ -1244,10 +1354,18 @@ body {
     margin: 0 -0.85rem -0.6rem;
   }
   .music-playlist.open {
-    max-height: min(175px, 40vh);
+    max-height: min(calc(175px + 42px), calc(40vh + 42px));
   }
   .playlist-inner {
     max-height: min(175px, 40vh);
+  }
+  .playlist-tab {
+    font-size: 0.66rem;
+    padding: 0.3rem 0.35rem;
+  }
+  .playlist-local-hint {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
   }
 
   .music-btn {
@@ -1308,10 +1426,19 @@ body {
     margin: 0 -0.75rem -0.5rem;
   }
   .music-playlist.open {
-    max-height: 135px;
+    max-height: calc(135px + 42px);
   }
   .playlist-inner {
     max-height: 135px;
+  }
+  .playlist-tab {
+    font-size: 0.62rem;
+    padding: 0.28rem 0.3rem;
+    gap: 0.2rem;
+  }
+  .playlist-local-hint {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
 
   .music-btn {
@@ -1640,8 +1767,7 @@ html.night-mode .trail-day-line {
   opacity: 1;
 }
 
-/* 日期星点 — 默认稀疏；选中/滑动时以当前日为中心 ±2 天浮现，其余淡出（class 由 JS 维护）
-   换月重建时沿弧依次点亮（animation-delay 由 JS 递增设置） */
+/* 日期星点 — 全部常显（换月重建时沿弧依次点亮，animation-delay 由 JS 递增设置） */
 .trail-star {
   transform-box: fill-box;
   transform-origin: center;
@@ -1651,9 +1777,6 @@ html.night-mode .trail-day-line {
 @keyframes trail-star-spawn {
   0%   { opacity: 0; transform: scale(0.3); }
   100% { opacity: 1; transform: scale(1); }
-}
-.trail-star.faint {
-  opacity: 0.12;
 }
 
 /* 日期数字 — 外弧外侧常显；换月时从弧线上依次升起（沿半径径向飘出 + 淡入缩放），
@@ -2493,6 +2616,65 @@ html.night-mode .playlist-inner::-webkit-scrollbar-thumb {
   background: rgba(140, 180, 210, 0.25);
 }
 
+/* 列表标签页与失效条目 — 夜间适配 */
+html.night-mode .playlist-tab:hover {
+  background: rgba(40, 65, 95, 0.45);
+  color: var(--text-primary);
+}
+html.night-mode .playlist-tab[aria-selected='true'] {
+  background: rgba(100, 160, 210, 0.18);
+  color: var(--accent-hover);
+}
+html.night-mode .playlist-cta {
+  color: var(--accent-hover);
+  border-color: rgba(140, 180, 210, 0.45);
+}
+html.night-mode .playlist-cta:hover {
+  background: rgba(40, 65, 95, 0.45);
+}
+
+/* 触摸设备没有真正的悬停态：点过的行会一直留着"悬停"底色和亮色文字，
+   看起来像选中了另一首，真正的当前曲目反而被盖住 —— 触摸端一律不启用悬停样式 */
+@media (hover: none) {
+  .playlist-item:hover {
+    background: none;
+    color: var(--text-secondary);
+  }
+  .playlist-item.current:hover {
+    background: rgba(137, 196, 225, 0.08);
+    color: var(--accent-hover);
+  }
+  .playlist-tab:hover {
+    background: none;
+    color: var(--text-secondary);
+  }
+  .playlist-tab[aria-selected='true']:hover {
+    background: var(--accent-soft);
+    color: var(--accent-hover);
+  }
+  .playlist-cta:hover {
+    background: none;
+  }
+  html.night-mode .playlist-item:hover {
+    background: none;
+    color: var(--text-secondary);
+  }
+  html.night-mode .playlist-item.current:hover {
+    background: rgba(100, 160, 210, 0.12);
+  }
+  html.night-mode .playlist-tab:hover {
+    background: none;
+    color: var(--text-secondary);
+  }
+  html.night-mode .playlist-tab[aria-selected='true']:hover {
+    background: rgba(100, 160, 210, 0.18);
+    color: var(--accent-hover);
+  }
+  html.night-mode .playlist-cta:hover {
+    background: none;
+  }
+}
+
 /* ============================================
    设置面板（#settings-toggle → #settings-overlay）
    ============================================ */
@@ -2512,6 +2694,11 @@ html.night-mode .playlist-inner::-webkit-scrollbar-thumb {
   opacity: 0;
   visibility: hidden;
   transition: opacity var(--transition-fast), visibility var(--transition-fast);
+  /* 遮罩自己不吃滚动：滚轮/触摸落在空白处不传给页面。
+     注意不能用 touch-action: none —— 触摸滚动的判定取的是"目标到滚动容器"整条祖先链的交集，
+     祖先设 none 会把面板内部的触摸滚动一起封掉；这里用 pan-y + 事件里拦截空白处拖动 */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .settings-overlay.open { opacity: 1; visibility: visible; }
 
@@ -2579,6 +2766,26 @@ html.night-mode .playlist-inner::-webkit-scrollbar-thumb {
 .settings-body {
   padding: 4px 20px 20px;
   overflow-y: auto;
+  /* 滚到顶/底后不把滚动传给页面 */
+  overscroll-behavior-y: contain;
+  /* 遮罩禁了触摸滚动，面板内部要恢复垂直触摸滚动 */
+  touch-action: pan-y;
+  /* 滚动条与播放列表统一：细窄、淡蓝滑块、无边框，避免默认滚动条显得突兀 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(137, 196, 225, 0.35) transparent;
+}
+.settings-body::-webkit-scrollbar {
+  width: 6px;
+}
+.settings-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-body::-webkit-scrollbar-thumb {
+  background: rgba(137, 196, 225, 0.35);
+  border-radius: 3px;
+}
+.settings-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(137, 196, 225, 0.55);
 }
 
 /* 分区 */
@@ -2635,6 +2842,82 @@ html.night-mode .playlist-inner::-webkit-scrollbar-thumb {
   font-size: 0.85rem;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* 本地音乐：来源信息 + 选择/更改按钮 */
+.settings-local {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--card-border);
+}
+.settings-local-path {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.settings-local-hint {
+  margin: 6px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+/* 权限说明：网页只能读取所选内容，不会改动电脑上的文件 */
+.settings-local-note {
+  margin: 4px 0 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+.settings-local-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.settings-local-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 6px;
+  border: 1px solid var(--accent-hover);
+  border-radius: 10px;
+  background: none;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--accent-hover);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.settings-local-btn:hover {
+  background: var(--accent-soft);
+}
+.settings-local-btn:focus-visible,
+.settings-local-clear:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+/* 清除选择：次级操作，用弱化的细边框与主按钮区分 */
+.settings-local-clear {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 6px;
+  border: 1px solid rgba(110, 144, 160, 0.35);
+  border-radius: 10px;
+  background: none;
+  font-family: inherit;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.settings-local-clear:hover {
+  background: rgba(217, 83, 79, 0.1);
+  border-color: rgba(217, 83, 79, 0.55);
+  color: #D9534F;
 }
 
 /* 开关 */
@@ -2699,6 +2982,34 @@ html.night-mode .seg-btn[aria-checked="true"] {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 html.night-mode .settings-mode-label { color: var(--text-muted); }
+html.night-mode .settings-local {
+  border-top-color: rgba(140, 180, 210, 0.22);
+}
+html.night-mode .settings-local-btn {
+  color: var(--accent-hover);
+  border-color: rgba(140, 180, 210, 0.45);
+}
+html.night-mode .settings-local-btn:hover {
+  background: rgba(40, 65, 95, 0.45);
+}
+html.night-mode .settings-local-clear {
+  color: rgba(205, 220, 232, 0.62);
+  border-color: rgba(140, 180, 210, 0.25);
+}
+html.night-mode .settings-local-clear:hover {
+  background: rgba(217, 83, 79, 0.18);
+  border-color: rgba(233, 139, 134, 0.6);
+  color: #E98B86;
+}
+html.night-mode .settings-body {
+  scrollbar-color: rgba(140, 180, 210, 0.3) transparent;
+}
+html.night-mode .settings-body::-webkit-scrollbar-thumb {
+  background: rgba(140, 180, 210, 0.3);
+}
+html.night-mode .settings-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 180, 210, 0.5);
+}
 html.night-mode .toggle-track { background: rgba(90, 120, 150, 0.4); }
 html.night-mode .toggle-label { color: var(--text-secondary); }
 html.night-mode .settings-overlay { background: rgba(4, 12, 22, 0.5); }

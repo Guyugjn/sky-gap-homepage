@@ -114,29 +114,97 @@
       }
     }
 
+    // ---- 本地音乐：来源与曲目数 ----
+    // 曲目可能在面板关闭期间变化（例如恢复完成、失效被自动移除），故每次打开都同步一次；
+    // 具体文案由 main.js 统一维护（那里才知道路径名与持久化能力）
+    function applyLocalMusicUI() {
+      if (window.__gyMusic && window.__gyMusic.syncSettingsUI) window.__gyMusic.syncSettingsUI();
+    }
+
+    // ---- 面板内部滚动：与播放列表同一套滚轮惯性手感（js/smoothScroll.js） ----
+    // 步长按面板的内容量级配（约 75px/格），惯性形状沿用播放列表那份参数
+    if (body && window.__gySmoothScroll) {
+      window.__gySmoothScroll.attach(body, {
+        physics: { maxSpeedChange: 6, maxSpeed: 18 },
+        isActive: function () { return !overlay.hidden; }
+      });
+    }
+
     // ---- 打开 / 关闭 ----
 
     var _closeTimer = null;
 
+    // ---- 面板打开期间：吃掉落在"面板滚动区之外"的滚动输入 ----
+    // 只给面板加 overscroll-behavior 拦不住：滚轮/按键落在遮罩空白、面板头部这些位置上时，
+    // 事件照样冒泡给页面，表现为"面板在滚、主页面也被滚走"。
+    // 这里只拦"不归面板管"的输入，不动页面任何布局与滚动位置。
+    function insideScroller(node) {
+      return !!(body && node && body.contains(node));
+    }
+
+    function onOverlayWheel(e) {
+      if (overlay.hidden) return;
+      if (insideScroller(e.target)) return;   // 面板主体的滚动交给它自己
+      e.preventDefault();
+    }
+
+    // 触摸端同理：遮罩空白处的手指拖动不吃，面板内部的滚动照常
+    function onOverlayTouchMove(e) {
+      if (overlay.hidden) return;
+      if (insideScroller(e.target)) return;
+      if (e.cancelable) e.preventDefault();
+    }
+
+    var SCROLL_KEYS = [' ', 'Spacebar', 'PageUp', 'PageDown', 'Home', 'End',
+                       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+
+    /** 空格对按钮/开关这类控件是"激活"键，得留给控件自己 */
+    function isActivatable(node) {
+      return !!(node && node.closest &&
+        node.closest('button, a, input, select, textarea, [role="button"]'));
+    }
+
+    function onPageKeydown(e) {
+      if (overlay.hidden) return;
+      if (SCROLL_KEYS.indexOf(e.key) === -1) return;
+      if (insideScroller(e.target)) return;   // 面板内的控件（含滑块）自己处理
+      if (e.key === ' ' && isActivatable(e.target)) return;
+      e.preventDefault();
+    }
+
     function open() {
       // 取消上一次关闭的延迟隐藏，避免快速「关→开」时旧 timer 把刚打开的面板藏起来
-      if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }
-      applyThemeUI();
+      if (_closeTimer) { clearTimeout(_closeTimer); _closeTimer = null; }      applyThemeUI();
       applyModeUI();
       applyVolumeUI();
       applyEffectsUI();
+      applyLocalMusicUI();
       bindVolumeSlider();
       if (live2dInput) live2dInput.checked = !!window.__gySettings.get().live2d;
       overlay.hidden = false;
-      requestAnimationFrame(function () { overlay.classList.add('open'); });
-      if (closeBtn) closeBtn.focus();
+      requestAnimationFrame(function () {
+        overlay.classList.add('open');
+        // 读一次布局，强制样式重算：面板此刻才真正可见（visibility: hidden 的元素聚焦无效）
+        void overlay.offsetHeight;
+        focusNoScroll(closeBtn);
+      });
     }
 
     function close() {
       overlay.classList.remove('open');
       if (_closeTimer) clearTimeout(_closeTimer);
       _closeTimer = setTimeout(function () { overlay.hidden = true; _closeTimer = null; }, 260);
-      if (toggle) toggle.focus();
+      focusNoScroll(toggle);
+    }
+
+    /**
+     * 聚焦但不让浏览器把元素滚进视口。
+     * 焦点回到齿轮按钮时，齿轮在页面顶部、用户可能早已滚到下面，
+     * 默认 focus() 会把整页滚上去 —— 开关一个面板不该改变页面的滚动位置。
+     */
+    function focusNoScroll(el) {
+      if (!el || typeof el.focus !== 'function') return;
+      try { el.focus({ preventScroll: true }); } catch (err) { el.focus(); }
     }
 
     // ---- 面板内提示条（动态创建，供"看板娘需刷新"等场景） ----
@@ -165,10 +233,14 @@
     overlay.addEventListener('mousedown', function (e) {
       if (e.target === overlay) close();
     });
+    // 面板打开时，遮罩/面板头部上的滚动输入不传给页面
+    overlay.addEventListener('wheel', onOverlayWheel, { passive: false });
+    overlay.addEventListener('touchmove', onOverlayTouchMove, { passive: false });
     // Esc 关闭
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && !overlay.hidden) close();
     });
+    document.addEventListener('keydown', onPageKeydown);
 
     // 主题
     for (var t = 0; t < themeBtns.length; t++) {

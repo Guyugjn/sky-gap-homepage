@@ -65,8 +65,12 @@
   <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
   <script defer src="assets/music/playlist.js"></script>
   <script defer src="assets/twemoji.min.js"></script>
+  <!-- 滚轮动量滚动：无依赖，供 settings.js（设置面板）与 main.js（整页滚动）调用 -->
+  <script defer src="js/smoothScroll.js"></script>
   <!-- settings.js 先于 main.js 执行，优先定义 __gySettings 存储（供各模块 init 读取默认值） -->
   <script defer src="js/settings.js"></script>
+  <!-- 本地音乐存储层：无依赖，供 main.js 的播放器调用 -->
+  <script defer src="js/localMusic.js"></script>
   <script defer src="js/main.js"></script>
   <script defer src="js/zodiac.js"></script>
   <script defer src="live2d/autoload.js"></script>
@@ -231,6 +235,23 @@
       <!-- 播放列表下拉面板 -->
       <div class="music-playlist" id="music-playlist">
         <div class="playlist-divider"></div>
+        <!-- 列表切换：本地音乐 / 网站歌单 各自独立成列表，播放队列互不干扰 -->
+        <div class="playlist-tabs" id="playlist-tabs" role="tablist" aria-label="音乐列表">
+          <button type="button" class="playlist-tab" id="tab-local" role="tab" aria-selected="true" data-tab="local">
+            <svg viewBox="0 0 24 24" class="playlist-tab-icon" aria-hidden="true"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+            <span class="playlist-tab-name">本地音乐</span>
+            <span class="playlist-tab-count" id="tab-local-count">0</span>
+          </button>
+          <button type="button" class="playlist-tab" id="tab-builtin" role="tab" aria-selected="false" data-tab="builtin">
+            <svg viewBox="0 0 24 24" class="playlist-tab-icon" aria-hidden="true"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            <span class="playlist-tab-name">网站歌单</span>
+            <span class="playlist-tab-count" id="tab-builtin-count">0</span>
+          </button>
+        </div>
+        <!-- 本地音乐提示条（降级环境提示 / 恢复与导入状态），仅本地标签下有意义 -->
+        <div class="playlist-local" id="playlist-local" hidden>
+          <p class="playlist-local-hint" id="local-music-hint" hidden></p>
+        </div>
         <div class="playlist-inner" id="playlist-inner"></div>
         <div class="playlist-divider playlist-divider-bottom"></div>
       </div>
@@ -273,6 +294,12 @@
         <div class="volume-bar-wrap" id="volume-bar" role="slider" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" tabindex="0"><div class="volume-fill" id="volume-fill"></div></div>
         <span class="volume-pct" id="volume-pct">20%</span>
       </div>
+
+      <!-- 隐藏的真实文件输入：两者拆开是刻意的 —— 同一节点上切换 webkitdirectory 在 Chromium 不稳定，
+           可能出现"打开的是文件选择器、解析却按目录模式"的错乱 -->
+      <input type="file" id="local-file-input" class="visually-hidden" multiple
+             accept="audio/*,.mp3,.m4a,.flac,.wav,.ogg,.oga,.opus,.aac,.wma">
+      <input type="file" id="local-dir-input" class="visually-hidden" webkitdirectory directory multiple>
     </div>
 
   </div><!-- .hero 结束 -->
@@ -420,6 +447,20 @@
             <span class="settings-mode-label">音量</span>
             <div class="volume-bar-wrap" id="settings-volume-bar" role="slider" aria-label="音量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" tabindex="0"><div class="volume-fill" id="settings-volume-fill"></div></div>
             <span class="volume-pct" id="settings-volume-val">20%</span>
+          </div>
+
+          <!-- 本地音乐：选择来源与当前路径信息 -->
+          <div class="settings-local">
+            <span class="settings-mode-label">本地音乐</span>
+            <div class="settings-local-path" id="settings-local-path">尚未选择本地音乐</div>
+            <!-- 说明：网页只能读取所选文件/文件夹，不会修改或删除电脑上的任何文件 -->
+            <p class="settings-local-note">仅记录在浏览器里，不会读取或改动你电脑上的文件</p>
+            <p class="settings-local-hint" id="settings-local-hint" hidden></p>
+            <div class="settings-local-actions">
+              <button type="button" class="settings-local-btn" id="settings-pick-files">选择音乐文件</button>
+              <button type="button" class="settings-local-btn" id="settings-pick-dir">选择文件夹</button>
+            </div>
+            <button type="button" class="settings-local-clear" id="settings-clear-local" hidden>清除选择</button>
           </div>
         </section>
 

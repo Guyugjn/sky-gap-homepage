@@ -50,10 +50,19 @@
       springTension: 0.20,     // 弹性定位劲度
       wheelSmoothAlpha: 0.55,  // 滚轮平滑系数（EWMA α）
     },
+    // 整页滚轮接管的步长（其余字段沿用 playlist，保持同样的惯性形状）
+    // 单格位移约 = maxSpeedChange / (1 - friction)，此处约 150px
+    pageScroll: {
+      maxSpeedChange: 12,
+      maxSpeed: 26,
+    },
     loadBar: {
       timeout: 8000,           // 超时强制完成（ms）
     },
   };
+
+  // 滚动手感参数共享给 js/smoothScroll.js（整页与设置面板复用播放列表这一套）
+  window.__gyScrollPhysics = CONFIG.playlist;
 
   // ==================== 设备检测 ====================
   var isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
@@ -666,9 +675,78 @@
   function initMusic() {
     if (!musicBtn || !musicPlayer) return;
 
-    // 从 playlist.js（<script> 标签加载）读取曲目列表
+    // 从 playlist.js（<script> 标签加载）读取内置曲目文件名
     var playlist = window.__PLAYLIST__ || [];
     var totalTracks = playlist.length;
+
+    // === 统一曲目模型 ===
+    // tracks[] 是**当前激活标签的播放队列**（本地音乐 / 网站歌单二选一）。
+    // 条目结构：{ i, tid, name, src }
+    //   src = { type:'local',  id, entry }  → 由 __gyLocalMusic 取 File，再 createObjectURL
+    //       | { type:'builtin', file }      → CONFIG.music.dir + encodeURIComponent(file)
+    // 两个列表各自成队：在哪个标签就只在该标签内切歌/随机，不会跨列表切歌。
+    var localTracks = [];     // 本地曲目条目（与 __gyLocalMusic 的 entries 镜像）
+    var tracks = [];
+    var _activeTab = 'local'; // 当前激活标签：'local' | 'builtin'
+    var _currentTid = '';     // 当前播放曲目的稳定标识（列表高亮不依赖索引，避免本地增删后错位）
+    // 本地音乐存储层（js/localMusic.js 先于 main.js 执行）
+    var _localMusic = window.__gyLocalMusic || null;
+    var _restoringLocal = false;
+
+    /** 按来源重建播放队列；不传则沿用当前激活标签（本地列表增删后调用） */
+    function buildTracks(source) {
+      if (source) _activeTab = source;
+      tracks = [];
+      if (_activeTab === 'local') {
+        localTracks.forEach(function (entry) {
+          tracks.push({
+            i: tracks.length,
+            tid: entry.id,
+            name: entry.name,
+            src: { type: 'local', id: entry.id, entry: entry }
+          });
+        });
+      } else {
+        playlist.forEach(function (file) {
+          tracks.push({
+            i: tracks.length,
+            // tid 用 URL 编码：内置曲目的 tid 是文件名本身，若直拼 HTML 属性做转义，
+            // 含引号的文件名（真实歌单里就有）在 DOM 上可能被解析错位导致点错行
+            tid: 'B' + encodeURIComponent(file),
+            name: file.replace(/\.mp3$/i, ''),
+            src: { type: 'builtin', file: file }
+          });
+        });
+      }
+      totalTracks = tracks.length;
+      // 队列重建必然伴随列表内容变化 → 顺手刷新标签计数，避免各调用点漏刷
+      updateTabCounts();
+    }
+    buildTracks();
+
+    /** 当前播放的曲目是否在激活队列里（不在 → 列表不高亮任何行） */
+    function _currentInQueue() {
+      return !!_currentTid && indexOfTid(_currentTid) !== -1;
+    }
+
+    /** 指定来源的曲目总数（用于空判定与"另一个列表还有 N 首"提示） */
+    function _sourceCount(source) {
+      return source === 'local' ? localTracks.length : playlist.length;
+    }
+
+    /** tid → tracks 索引（找不到返回 -1） */
+    function indexOfTid(tid) {
+      for (var i = 0; i < tracks.length; i++) {
+        if (tracks[i].tid === tid) return i;
+      }
+      return -1;
+    }
+
+    /** 以稳定标识定位当前播放项；索引会随本地列表增删失效，故此处重新换算 */
+    function _playTrackIndex() {
+      if (_currentTid) return indexOfTid(_currentTid);
+      return started ? currentIndex : -1;
+    }
 
     // 从设置恢复播放模式（0=列表循环 1=单曲 2=随机，默认随机）
     try {
@@ -722,9 +800,12 @@
       } else {
         nextIdx = randomIndex();            // 随机：预载一首
       }
+      // 本地曲目不预载：blob URL 由播放路径按需创建，预载没有收益只有内存开销
+      var nextTrack = tracks[nextIdx];
+      if (!nextTrack || nextTrack.src.type !== 'builtin') return;
       // 先清空再赋值：取消旧预加载请求，避免多首 mp3 并行下载抢带宽
       preloadAudio.src = '';
-      preloadAudio.src = CONFIG.music.dir + encodeURIComponent(playlist[nextIdx]);
+      preloadAudio.src = CONFIG.music.dir + encodeURIComponent(nextTrack.src.file);
       preloadDone = true;
     }
 
@@ -745,10 +826,44 @@
 
     // === 工具函数 ===
 
-    // 从文件名获取显示曲名（去掉 .mp3 后缀）
+    // 从曲目条目获取显示曲名（内置曲目为文件名去后缀，本地曲目用导入时的文件名）
     function getDisplayName(index) {
-      var filename = playlist[index] || '';
-      return filename.replace(/\.mp3$/i, '');
+      var t = tracks[index];
+      return t ? t.name : '';
+    }
+
+    // === 取源分流：内置曲目拼路径，本地曲目经句柄取 File 后建 blob URL ===
+    // 规则：createObjectURL 只在 rAF（点播放）或用户手势内发生 → 不会撞上自动播放策略。
+    // 取 blob URL 时不写 audio.src、不碰 UI 状态 —— 这些由调用方在 promise 落定后统一处理。
+    var _blobByTid = {};   // tid → blob URL（本模块创建的才登记）
+    var _blobOrder = [];   // 登记顺序，用于超量回收
+    var MAX_BLOB_KEEP = 8;
+
+    function _rememberBlob(tid, url) {
+      _blobByTid[tid] = url;
+      _blobOrder.push(tid);
+      while (_blobOrder.length > MAX_BLOB_KEEP) {
+        var old = _blobOrder.shift();
+        var oldUrl = _blobByTid[old];
+        if (!oldUrl) continue;
+        delete _blobByTid[old];
+        if (old !== _currentTid) _localMusic.revokeBlobUrl(oldUrl);
+      }
+    }
+
+    function resolveTrackUrl(t) {
+      if (!t) return Promise.reject(new Error('曲目不存在'));
+      if (t.src.type === 'builtin') {
+        return Promise.resolve(CONFIG.music.dir + encodeURIComponent(t.src.file));
+      }
+      // 本地曲目：已经建过 blob URL 就直接复用，避免重复读盘
+      var cached = _blobByTid[t.tid];
+      if (cached) return Promise.resolve(cached);
+      return _localMusic.getFile(t.src.entry).then(function (file) {
+        var url = _localMusic.createBlobUrl(file);
+        _rememberBlob(t.tid, url);
+        return url;
+      });
     }
 
     // HTML 转义：文件名拼接进 innerHTML 前转义，防止特殊字符破坏 DOM 结构
@@ -760,19 +875,25 @@
 
     function updateLabel(index) {
       if (!musicLabel) return;
-      var name = getDisplayName(index);
+      // 按稳定标识重算索引：本地音乐增删后索引会变，直接沿用旧值会张冠李戴
+      var idx = _playTrackIndex();
+      if (idx < 0) idx = index;
+      var t = tracks[idx];
+      if (!t) {   // 曲目已被移除（正在播的本地曲目被删）
+        musicLabel.textContent = '来放一首音乐吧 🎵';
+        musicLabel.title = '';
+        musicLabel.classList.remove('playing', 'loading');
+        updateListHighlight();
+        return;
+      }
+      var name = t.name;
       musicLabel.textContent = name;
       musicLabel.title = name;
       musicLabel.style.display = 'block';
       musicLabel.classList.remove('loading');
       musicLabel.classList.add('playing');
-      // 同步更新播放列表高亮
-      if (listInner) {
-        var items = listInner.querySelectorAll('.playlist-item');
-        for (var k = 0; k < items.length; k++) {
-          items[k].classList.toggle('current', parseInt(items[k].dataset.index, 10) === index);
-        }
-      }
+      // 同步更新播放列表高亮（按稳定标识匹配）
+      updateListHighlight();
     }
 
     // 曲名位置显示加载状态
@@ -785,16 +906,33 @@
       musicLabel.classList.remove('playing');
     }
 
+    // 曲目加载令牌：本地曲目取 File 是异步的，连点会乱序，用令牌保证只有最新一次生效
+    var _loadToken = 0;
+    // 当前期望的音频地址：解码失败 / 被中断的 error 事件可能在用户已切歌后才到达，
+    // 必须用它比对 audio.src 才能判断这个错误属不属于"现在这首"，否则过期错误会打断新曲目播放
+    var _loadedSrc = '';
+
     function loadTrack(index) {
+      var t = tracks[index];
+      if (!t) return Promise.resolve(false);
+
       currentIndex = index;
-      var src = CONFIG.music.dir + encodeURIComponent(playlist[index]);
-      audio.src = src;            // 赋值 src 会自动触发 loadstart 事件，事件中已调用 showLoadingLabel()
-      preloadDone = false;       // 新曲目重置，等缓冲够了再预加载
-      started = true;
+      _currentTid = t.tid;
+      _loadedSrc = '';       // 新加载开始，旧地址的 error 先失效
+      preloadDone = false;   // 新曲目重置，等缓冲够了再预加载
+      started = true;        // 先置位，避免本地曲目取文件失败时 started 仍为 false 而触发"首次加载"分支
       // 曲名气泡提示仅在播放后显示
       if (musicLabel && musicLabel.parentElement) {
         musicLabel.parentElement.classList.add('show-tip');
       }
+
+      var token = ++_loadToken;
+      return resolveTrackUrl(t).then(function (url) {
+        if (token !== _loadToken) return false;  // 已被后一次切歌接管
+        audio.src = url;    // 赋值 src 会自动触发 loadstart 事件，事件中已调用 showLoadingLabel()
+        _loadedSrc = audio.src;   // 读回规范化后的绝对地址，与 error 时的 audio.src 同源可比
+        return true;
+      });
     }
 
     // 随机选曲
@@ -822,7 +960,7 @@
         preloadDone = false; // 等缓冲够了再自动预加载下一首
       }).catch(function (err) {
         if (token !== _playToken) return; // 被抢占的失败不提示
-        console.warn('播放失败：', err.message);
+        console.warn('播放失败：', (err && err.name) || '未知错误', (err && err.message) || '');
         updateLabel(currentIndex); // 清除"加载中…"状态
         showToast('⚠️ 播放失败，请检查网络或点击重试', 2500);
       });
@@ -877,8 +1015,13 @@
       } else {
         currentIndex = (currentIndex - 1 + totalTracks) % totalTracks;
       }
-      loadTrack(currentIndex);
-      play();
+      // 必须先等 src 落地再 play()：loadTrack 是异步的（本地曲目要取文件），
+      // src 未赋值就 play 会立刻抛 AbortError，表现为"播放失败"
+      var token = _loadToken + 1;
+      loadTrack(currentIndex).then(function () {
+        if (_loadToken !== token) return;   // 期间又被切歌，交给后一次
+        play();
+      });
       notifySongChange();
       if (listOpen) scrollToListIndex(currentIndex);
     }
@@ -901,8 +1044,11 @@
         // 列表循环
         currentIndex = (currentIndex + 1) % totalTracks;
       }
-      loadTrack(currentIndex);
-      play();
+      var token = _loadToken + 1;
+      loadTrack(currentIndex).then(function () {
+        if (_loadToken !== token) return;
+        play();
+      });
       notifySongChange();
       if (listOpen) scrollToListIndex(currentIndex);
     }
@@ -929,10 +1075,36 @@
     // === 播放结束 ===
     audio.addEventListener('ended', playNext);
 
-    // === 播放错误 → 自动跳过（连续失败 3 次后停止提示） ===
+    // === 播放错误 → 本地失效走"标灰 + 移除"，内置曲目维持原有自动跳过 ===
     var _audioErrorCount = 0;
     audio.addEventListener('error', function () {
       console.warn('音频加载错误：', audio.error ? audio.error.message : '未知错误');
+
+      // 过期错误：错误产生时加载的并不是"现在这首"（用户已切歌，或那次加载已被接管）→ 丢弃
+      if (!_loadedSrc || audio.src !== _loadedSrc) return;
+
+      var t = tracks[currentIndex];
+      if (t && t.src.type === 'local') {
+        // 本地文件被移动/删除，或未获得访问授权 → 直接从列表与存储中移除，不再保留失效条目
+        var deadId = t.src.entry.id;
+        if (_localMusic) _localMusic.remove(deadId);
+        localTracks = _localMusic ? _localMusic.entries() : localTracks;
+        buildTracks('local');     // 该曲目属于本地列表：让"自动消失"在本地列表里立刻可见
+        _audioErrorCount = 0;
+        // 曲目已不在队列里：清掉当前标识避免误导高亮；
+        // 保持 started 不动、索引归 0，这样"下一首"从队列第一位开始而不会跳曲
+        _currentTid = '';
+        currentIndex = 0;
+        if (musicLabel) musicLabel.classList.remove('playing', 'loading');
+        renderPlaylist();
+        updateTabUI();
+        syncSettingsLocalUI();
+        refreshLocalHint();
+        showToast('⚠️ 本地文件已失效，已移除', 2500);
+        if (isPlaying) setTimeout(function () { if (isPlaying) playNext(); }, 300);
+        return;
+      }
+
       if (!started) { updateLabel(currentIndex); return; }
       // 已开始播放的曲目出错 → 计数检查
       if (++_audioErrorCount >= CONFIG.music.errorMaxCount) {
@@ -1047,87 +1219,231 @@
     var listInner = document.getElementById('playlist-inner');
     var listOpen = false;
 
-    // 播放列表渲染缓存 — 避免每次打开重建 DOM
-    var _playlistRendered = false;
+    // 列表标签栏与本地音乐相关 DOM
+    var tabLocal = document.getElementById('tab-local');
+    var tabBuiltin = document.getElementById('tab-builtin');
+    var tabLocalCount = document.getElementById('tab-local-count');
+    var tabBuiltinCount = document.getElementById('tab-builtin-count');
+    var localWrap = document.getElementById('playlist-local');
+    var localHint = document.getElementById('local-music-hint');
+    var fileInput = document.getElementById('local-file-input');
+    var dirInput = document.getElementById('local-dir-input');
+
+    // 列表渲染签名：激活标签 + 内置曲目摘要 + 本地曲目摘要
+    // 切换标签会换队列 → 签名变化 → 重建；listInner 上的事件委托绑定一次即长期有效，
+    // innerHTML 替换不影响委托
+    var _lastSignature = null;
+    var _delegated = false;   // 事件委托是否已绑定（与渲染签名解耦，只绑一次）
+
+    function _signature() {
+      var b = playlist.length + ':' + playlist.join('\u0001');
+      var l = localTracks.map(function (e) { return e.id + ':' + e.state; }).join('\u0002');
+      // 派生出两条队列（标签切换会换队列 → 必须参与签名，否则切标签不重建）
+      return _activeTab + '|b' + b + '|l' + l;
+    }
+
+    /** 渲染后按稳定标识定位当前曲目的索引（本地增删会改变索引，此处统一重算） */
+    function syncCurrentIndexByTid() {
+      if (!_currentTid) return;
+      for (var i = 0; i < tracks.length; i++) {
+        if (tracks[i].tid === _currentTid) { currentIndex = i; return; }
+      }
+    }
+
+    /** 更新标签页计数 */
+    function updateTabCounts() {
+      if (tabLocalCount) tabLocalCount.textContent = localTracks.length;
+      if (tabBuiltinCount) tabBuiltinCount.textContent = playlist.length;
+    }
+
+    /** 高亮当前标签 */
+    function updateTabUI() {
+      if (tabLocal) tabLocal.setAttribute('aria-selected', _activeTab === 'local' ? 'true' : 'false');
+      if (tabBuiltin) tabBuiltin.setAttribute('aria-selected', _activeTab === 'builtin' ? 'true' : 'false');
+      // 提示条只对本地列表有意义
+      if (localWrap) localWrap.hidden = _activeTab !== 'local';
+      refreshLocalHint();
+    }
+
+    /** 更新本地音乐提示条（降级环境 / 恢复中 / 导入结果） */
+    function refreshLocalHint(overrideText) {
+      if (!localHint) return;
+      if (overrideText) {
+        // 导入 / 恢复状态：切到本地列表让用户看到结果
+        if (localWrap) localWrap.hidden = false;
+        localHint.textContent = overrideText;
+        localHint.hidden = false;
+        return;
+      }
+      if (_activeTab !== 'local') {
+        localHint.hidden = true;
+        localHint.textContent = '';
+        return;
+      }
+      var persist = _localMusic ? _localMusic.canPersist() : false;
+      if (persist || !localTracks.length) {
+        localHint.hidden = true;
+        localHint.textContent = '';   // 清掉残留的状态文案，避免读屏软件念到过期内容
+        return;
+      }
+      localHint.textContent = '当前浏览器不支持跨会话保存，本地音乐仅本次浏览有效';
+      localHint.hidden = false;
+    }
 
     function selectTrack(idx) {
+      var t = tracks[idx];
+      if (!t) return;
       if (idx === currentIndex && started) return;
       if (playMode === 2 && started) {
         if (playHistory.length >= MAX_HISTORY) playHistory.shift();
-        playHistory.push(currentIndex);
+        if (currentIndex >= 0) playHistory.push(currentIndex);
       }
-      loadTrack(idx);
-      play();
+      // 同上：等 src 落地再播，避免"无源 play"抛 AbortError
+      var token = _loadToken + 1;
+      loadTrack(idx).then(function () {
+        if (_loadToken !== token) return;
+        play();
+      });
       notifySongChange();
-      scrollToListIndex(idx);
+      // 手指点选后不做居中定位：手指刚离开屏幕，此刻写 scrollTop 会和原生惯性滚动互相拉扯，
+      // 表现为列表抖动、点不准。点中的行本来就在眼前，无需再滚。
+      if (!isTouchOrigin()) scrollToListIndex(idx);
     }
 
-    // 触摸防误触状态（事件委托共享）
-    var _touchState = null;
+    // 触摸端手势判定：这次抬手究竟算"点选"还是"滑动/刹停惯性"
+    // 列表滚动完全交给原生，这里只记录状态，不接管、不拦截
+    var _listTouch = { x: 0, y: 0, scrollTop: 0, at: 0, moved: false };
+    var _listScrollAt = 0;        // 最近一次列表滚动的时间戳（含惯性阶段）
+    var _lastTouchAt = 0;         // 最近一次触摸交互的时间戳（判断这次点选是不是"手指点的"）
+    var TAP_SLOP = 6;             // 手指位移超过该值即视为滑动
+    var TAP_STOP_MS = 120;        // 刚停下滚动就抬手，视为"刹停"而非点选
+    var TOUCH_HINT_MS = 800;      // 触摸后多久内到达的 click 仍算触摸点选
+
+    /** 这次 click 是否由触摸手势产生（触摸屏笔记本上鼠标点击不该走这套判定） */
+    function isTouchOrigin() {
+      return performance.now() - _lastTouchAt < TOUCH_HINT_MS;
+    }
+
+    function isListGesture() {
+      if (_listTouch.moved) return true;
+      if (Math.abs(listInner.scrollTop - _listTouch.scrollTop) > 2) return true;
+      if (_listScrollAt > _listTouch.at) return true;                  // 手指按下后列表还在滚（惯性没停）
+      return _listTouch.at - _listScrollAt < TAP_STOP_MS;              // 手指落下时列表刚滚过 → 是"刹停"
+    }
 
     function renderPlaylist() {
       if (!listInner) return;
+      var sig = _signature();
+      if (sig === _lastSignature) { updateListHighlight(); return; }
 
-      if (!totalTracks) {
-        if (!_playlistRendered) {
-          listInner.innerHTML = '<span class="playlist-empty">🎵 歌单为空，请添加音乐文件</span>';
-          if (window.twemoji) window.twemoji.parse(listInner);
-          _playlistRendered = true;
-        }
-        return;
-      }
+      // 记录滚动位置：重建会影响长列表的浏览位置，用户不应被弹回顶部
+      var _prevScroll = listInner.scrollTop;
+      _lastSignature = sig;
 
-      if (!_playlistRendered) {
-        // 首次渲染：创建 DOM + 绑定事件委托
-        var html = '';
-        for (var i = 0; i < totalTracks; i++) {
-          var isCurrent = (i === currentIndex && started);
-          var cls = isCurrent ? ' class="playlist-item current"' : ' class="playlist-item"';
-          html += '<span' + cls + ' data-index="' + i + '">' +
-                  '<span class="pl-index">' + (i + 1) + '</span>' +
-                  '<span class="pl-name">' + escapeHtml(getDisplayName(i)) + '</span>' +
-                  '</span>';
-        }
-        listInner.innerHTML = html;
+      var html = _activeListHtml();
+      listInner.innerHTML = html;
 
-        // 事件委托：click（桌面端）
+      if (!_delegated) {
+        _delegated = true;
+
+        // 列表自身滚动（触摸惯性阶段也会持续触发）→ 仅记录时间戳
+        listInner.addEventListener('scroll', function () {
+          _listScrollAt = performance.now();
+        }, { passive: true });
+
+        // 事件委托：选曲统一走 click —— 触摸端浏览器只在"点选"时补发 click，
+        // 滑动/惯性期间不会补发，因此不会与滚动抢事件（touchend 再选一次会重复触发）
         listInner.addEventListener('click', function (e) {
           var item = e.target.closest('.playlist-item');
-          if (!item) return;
-          selectTrack(parseInt(item.dataset.index, 10));
+          if (!item || !item.dataset.tid) return;
+          if (isTouchOrigin() && isListGesture()) return;   // 滑动过 / 刚刹停 → 不算点选
+          selectTrack(indexOfTid(item.dataset.tid));
         });
 
-        // 事件委托：触摸防误触
+        // 触摸端只做手势判定，不选区、不改滚动位置
         listInner.addEventListener('touchstart', function (e) {
-          _touchState = { y: e.touches[0].clientY, moved: false };
+          var t = e.touches[0];
+          _lastTouchAt = performance.now();
+          _listTouch = {
+            x: t.clientX,
+            y: t.clientY,
+            scrollTop: listInner.scrollTop,
+            at: performance.now(),
+            moved: false
+          };
         }, { passive: true });
 
         listInner.addEventListener('touchmove', function (e) {
-          if (_touchState && Math.abs(e.touches[0].clientY - _touchState.y) > 10) {
-            _touchState.moved = true;
+          var t = e.touches[0];
+          if (Math.abs(t.clientY - _listTouch.y) > TAP_SLOP ||
+              Math.abs(t.clientX - _listTouch.x) > TAP_SLOP) {
+            _listTouch.moved = true;
           }
         }, { passive: true });
 
-        listInner.addEventListener('touchend', function (e) {
-          if (!_touchState || _touchState.moved) { _touchState = null; return; }
-          var item = e.target.closest('.playlist-item');
-          if (!item) { _touchState = null; return; }
-          selectTrack(parseInt(item.dataset.index, 10));
-          _touchState = null;
-        });
-
-        _playlistRendered = true;
-      } else {
-        // 已渲染过，仅更新高亮
-        var items = listInner.querySelectorAll('.playlist-item');
-        for (var k = 0; k < items.length; k++) {
-          items[k].classList.toggle('current', parseInt(items[k].dataset.index, 10) === currentIndex && started);
-        }
+        // 手势被系统接管（来电、滚动接管等）→ 一律按滑动处理，避免误选
+        listInner.addEventListener('touchcancel', function () {
+          _listTouch.moved = true;
+        }, { passive: true });
       }
+
+      // 恢复滚动位置（首次渲染 scrollTop 本就是 0）
+      listInner.scrollTop = _prevScroll;
+      updateListHighlight();
 
       // 移动端打开列表不做定位跳转：列表刚展开由原生滚动接管（从顶部开始即可），
       // 避免折叠态/过渡期写 scrollTop 导致 iOS 列表卡死；切歌/点选时列表已打开会另行定位
-      if (started && !isTouchDevice) scrollToListIndex(currentIndex);
+      // 当前曲目不在激活列表里时不定位（例如在"网站歌单"下播着歌，切到"本地音乐"）
+      if (started && !isTouchDevice && _currentInQueue()) scrollToListIndex(currentIndex);
+    }
+
+    /** 当前激活列表的内容（两个列表各自独立渲染，不再拼接分组标题） */
+    function _activeListHtml() {
+      return _activeTab === 'local' ? _localListHtml() : _builtinListHtml();
+    }
+
+    /** 本地音乐列表 */
+    function _localListHtml() {
+      if (!localTracks.length) {
+        return '<span class="playlist-empty">🎵 还没有本地音乐</span>' +
+               '<span class="playlist-cta-hint">可在设置面板的「音乐」里选择本地文件或文件夹</span>';
+      }
+      var html = '';
+      localTracks.forEach(function (entry, rowIndex) {
+        html += '<span class="playlist-item playlist-item--local" data-tid="' + escapeHtml(entry.id) + '" data-kind="local">' +
+                // 序号取列表位置：entry 是存储层条目（无序号字段），
+                // 而本地列表的顺序与 tracks 队列一致，二者序号必须相同
+                '<span class="pl-index">' + (rowIndex + 1) + '</span>' +
+                '<span class="pl-name">' + escapeHtml(entry.name) + '</span>' +
+                '</span>';
+      });
+      return html;
+    }
+
+    /** 网站歌单列表 */
+    function _builtinListHtml() {
+      if (!playlist.length) {
+        return '<span class="playlist-empty">🎵 网站歌单为空</span>' +
+               '<span class="playlist-cta-hint">可在 assets/music/ 放入音频后运行 generate_playlist.py 生成</span>';
+      }
+      var html = '';
+      for (var i = 0; i < playlist.length; i++) {
+        html += '<span class="playlist-item" data-tid="B' + encodeURIComponent(playlist[i]) + '" data-kind="builtin">' +
+                '<span class="pl-index">' + (i + 1) + '</span>' +
+                '<span class="pl-name">' + escapeHtml(playlist[i].replace(/\.mp3$/i, '')) + '</span>' +
+                '</span>';
+      }
+      return html;
+    }
+
+    /** 高亮按稳定标识匹配（索引会随本地增删变动，不能用索引比对） */
+    function updateListHighlight() {
+      if (!listInner) return;
+      var items = listInner.querySelectorAll('.playlist-item');
+      for (var k = 0; k < items.length; k++) {
+        var isCurrent = !!(started && _currentTid && items[k].dataset.tid === _currentTid);
+        items[k].classList.toggle('current', isCurrent);
+      }
     }
 
     // === 动量滚动系统 ===
@@ -1281,6 +1597,264 @@
       });
     }
 
+    // ==================== 本地音乐（来源在设置面板，这里负责列表与播放） ====================
+
+    /** 切换列表标签：换队列、重绘列表；正在播放的曲目不受影响 */
+    function switchTab(tab) {
+      if (tab !== 'local' && tab !== 'builtin') return;
+      if (tab === _activeTab) return;
+
+      buildTracks(tab);
+      syncCurrentIndexByTid();
+
+      // 正在播的曲目不在新列表里时，重算出来的索引会失效 —— 显式置 -1，
+      // 避免"下一首"从错误的位置起跳（列表高亮本就不高亮任何行）
+      if (_currentTid && indexOfTid(_currentTid) === -1) currentIndex = -1;
+
+      updateTabUI();
+      renderPlaylist();
+
+      // 列表开着就重新定位到当前曲目（当它不是当前列表的曲目时不做定位）
+      if (listOpen && tracks.length && _currentInQueue()) {
+        if (isTouchDevice) listInner.scrollTop = 0;
+        else scrollToListIndex(currentIndex);
+      }
+      showToast(tab === 'local' ? '📁 本地音乐' : '🎵 网站歌单', 1200);
+    }
+
+    if (tabLocal) {
+      tabLocal.addEventListener('click', function () { switchTab('local'); });
+    }
+    if (tabBuiltin) {
+      tabBuiltin.addEventListener('click', function () { switchTab('builtin'); });
+    }
+
+    /**
+     * 统一导入入口。
+     * 注意：pickFiles / pickDirectory 必须在用户手势调用栈内"直接"调用
+     * （内部 showOpenFilePicker 会检查用户激活），因此这里只在 .then 里收尾，不做前置 await。
+     */
+    function importFrom(run) {
+      if (!_localMusic) return;
+      refreshLocalHint('正在导入本地音乐…');
+      run().then(function (added) {
+        finishImport(added);
+      }, function (err) {
+        if (err && err.code === 'ABORT') { refreshLocalHint(); return; }
+        if (err && err.code === 'UNSUPPORTED') {
+          refreshLocalHint('当前浏览器不支持该选择方式');
+        } else {
+          refreshLocalHint('');
+          localHint.hidden = true;
+          showToast('⚠️ 导入本地音乐失败', 2200);
+        }
+      });
+    }
+
+    /**
+     * 重新选择来源（设置面板的「更改路径」）：先清空旧列表再选新来源。
+     * 清空发生在用户手势内（pickFiles 是同步调用），若用户取消选择则不会走到 addFiles，旧列表并不受影响。
+     */
+    function replaceLocalMusic(pick) {
+      if (!_localMusic) return;
+      importFrom(function () {
+        return _localMusic.clearAll().then(function () {
+          return pick();
+        });
+      });
+    }
+
+    /** 导入收尾：更新模型与列表、按结果给提示 */
+    function finishImport(added) {
+      var before = localTracks.length;
+      localTracks = _localMusic.entries();
+
+      // 导入的东西属于本地列表：切过去并重建队列，否则用户在"网站歌单"标签下会看不到结果
+      if (added && added.length) _activeTab = 'local';
+      buildTracks();
+      syncCurrentIndexByTid();
+      updateTabUI();
+      renderPlaylist();
+      syncSettingsLocalUI();
+
+      var nowCount = localTracks.length;
+      if (added && added.length) {
+        showToast('🎵 已添加 ' + added.length + ' 首本地音乐', 2000);
+      } else if (nowCount === before) {
+        showToast('未找到可播放的音频文件', 2000);
+      }
+
+      // 首次导入后把列表滚到顶部，让用户看到刚加进来的曲目
+      if (listOpen && listInner && nowCount > before) listInner.scrollTop = 0;
+      refreshLocalHint();
+    }
+
+    function onInputChange(e) {
+      var files = e.target.files;
+      if (!files || !files.length) { refreshLocalHint(); return; }
+      var input = e.target;
+      // 必须先取出数组再复位 input：input.value = '' 会把 FileList 清空，
+      // 而下面的清空/导入是异步的，届时再读 files 就一个都不剩了
+      var picked = [];
+      for (var i = 0; i < files.length; i++) picked.push(files[i]);
+      input.value = '';   // 复位，允许再次选择同一批文件
+
+      // 与设置页「选择 / 更改」语义一致：先清空旧列表再导入新选择
+      importFrom(function () {
+        return _localMusic.clearAll().then(function () {
+          // 会话轨接管所有 File 输入：FSA 环境下的 <input> 路径不持久化（避免句柄语义混乱）
+          return Promise.resolve(_localMusic.addFiles(picked));
+        });
+      });
+    }
+    if (fileInput) fileInput.addEventListener('change', onInputChange);
+    if (dirInput) dirInput.addEventListener('change', onInputChange);
+
+    // 拖到页面其它位置时不打开文件、不跳转（播放器窗口自身已不接收拖拽）
+    document.addEventListener('dragover', function (e) {
+      if (e.dataTransfer) e.preventDefault();
+    });
+    document.addEventListener('drop', function (e) {
+      if (e.dataTransfer) e.preventDefault();
+    });
+
+    // ---- 设置面板里的本地音乐区域 ----
+    var settingsLocalPath = document.getElementById('settings-local-path');
+    var settingsLocalHint = document.getElementById('settings-local-hint');
+    var settingsClearBtn = document.getElementById('settings-clear-local');
+
+    /**
+     * 同步设置面板的本地音乐信息。
+     * 路径展示：目录导入 → 文件夹名 + 曲目数；多选文件 → 只显示曲目数
+     * （浏览器出于安全不允许读取绝对路径）。
+     */
+    function syncSettingsLocalUI() {
+      if (!settingsLocalPath) return;
+      var n = localTracks.length;
+      var canPersist = _localMusic ? _localMusic.canPersist() : false;
+      var pathName = _localMusic && _localMusic.getPathName ? _localMusic.getPathName() : '';
+
+      if (!n) {
+        // 曲目在刷新后可能已失效/消失（降级环境的会话轨），此时不显示过期的文件夹名
+        settingsLocalPath.textContent = '尚未选择本地音乐';
+      } else if (pathName) {
+        settingsLocalPath.textContent = pathName + ' · ' + n + ' 首';
+      } else {
+        settingsLocalPath.textContent = '已选择 ' + n + ' 首本地音乐';
+      }
+
+      // 没有选择时不给"清除"入口
+      if (settingsClearBtn) settingsClearBtn.hidden = (n === 0);
+
+      // 提示只在有内容或需要告知限制时出现
+      if (settingsLocalHint) {
+        if (n && !canPersist) {
+          settingsLocalHint.textContent = '当前浏览器不支持跨会话保存，本地音乐仅本次浏览有效';
+          settingsLocalHint.hidden = false;
+        } else {
+          settingsLocalHint.hidden = true;
+          settingsLocalHint.textContent = '';
+        }
+      }
+    }
+
+    /**
+     * 清除已选中的本地音乐。
+     * 只清掉浏览器里的记录与文件引用 —— 网页只被授予过读取权限，
+     * 从不申请写入权限，因此不会删改用户电脑上的任何文件。
+     */
+    function clearLocalMusic() {
+      if (!_localMusic) return;
+
+      _localMusic.clearAll().then(function () {
+        localTracks = _localMusic.entries();
+
+        // 彻底停掉可能还在播的本地曲目（blob 已被撤销，继续播没有意义）
+        pause();
+        audio.removeAttribute('src');
+        _loadedSrc = '';
+        _currentTid = '';
+        started = false;   // 回到"还没播过"的状态：下次按播放键会重新选一首开播
+        currentIndex = 0;  // 指向即将生效的队列首位（清除后本地列表已空）
+        if (musicLabel) {
+          musicLabel.textContent = '来放一首音乐吧 🎵';
+          musicLabel.title = '';
+          musicLabel.classList.remove('playing', 'loading');
+        }
+
+        // 本地列表已空 → 回到网站歌单，避免停在空列表上
+        _activeTab = 'builtin';
+        buildTracks();
+        updateTabUI();
+        renderPlaylist();
+        syncSettingsLocalUI();
+        refreshLocalHint();
+        showToast('🗑 已清除选择（不会动你电脑上的文件）', 2600);
+      });
+    }
+
+    /** 需要重新授权时给出引导（重新打开页面后浏览器可能已撤销文件夹访问权） */
+    function warnNeedAuth(count) {
+      if (!count) return;
+      showToast('⚠️ 本地音乐需重新授权，可在设置面板重新选择', 3200);
+    }
+
+    // 设置面板按钮：存在即绑定（设置面板与播放器同页，DOM 已就绪）
+    var pickFilesBtn = document.getElementById('settings-pick-files');
+    var pickDirBtn = document.getElementById('settings-pick-dir');
+
+    if (pickFilesBtn) {
+      pickFilesBtn.addEventListener('click', function () {
+        if (!_localMusic) return;
+        if (_localMusic.canPersist()) {
+          replaceLocalMusic(function () { return _localMusic.pickFiles(); });
+        } else if (fileInput) {
+          fileInput.click();   // 降级环境：走原生 <input type="file">
+        }
+      });
+    }
+    if (pickDirBtn) {
+      pickDirBtn.addEventListener('click', function () {
+        if (!_localMusic) return;
+        if (_localMusic.canPersist() && typeof _localMusic.pickDirectory === 'function') {
+          replaceLocalMusic(function () { return _localMusic.pickDirectory(); });
+        } else if (dirInput) {
+          dirInput.click();    // 降级环境：走 webkitdirectory 输入
+        }
+      });
+    }
+    if (settingsClearBtn) {
+      settingsClearBtn.addEventListener('click', clearLocalMusic);
+    }
+
+    // ---- 异步恢复上次导入的本地音乐（不阻塞 init，接口先就绪） ----
+    function restoreLocalMusic() {
+      if (!_localMusic) return;
+      _restoringLocal = true;
+      refreshLocalHint('正在恢复本地音乐…');
+      _localMusic.restore().then(function (res) {
+        _restoringLocal = false;
+        localTracks = res.entries;
+        // 没有本地曲目时默认落在网站歌单：避免打开列表先看到空列表
+        _activeTab = localTracks.length ? 'local' : 'builtin';
+        buildTracks();
+        syncCurrentIndexByTid();
+        updateTabUI();
+        renderPlaylist();
+        refreshLocalHint();
+        syncSettingsLocalUI();
+        warnNeedAuth(res.needAuth);
+      }, function () {
+        _restoringLocal = false;
+        _activeTab = 'builtin';
+        buildTracks();
+        updateTabUI();
+        renderPlaylist();
+        refreshLocalHint();
+        syncSettingsLocalUI();
+      });
+    }
+
     // === 音量控制 ===
     function updateVolumeUI(vol) {
       var pct = Math.round(vol * 100);
@@ -1391,9 +1965,12 @@
     musicBtn.addEventListener('click', function () {
       if (!started) {
         // 首次加载
-        if (!totalTracks) { showToast('⚠️ 播放列表为空，请运行 python generate_playlist.py'); return; }
-        loadTrack(randomIndex());
-        play();
+        if (!totalTracks) { showToast('⚠️ 播放列表为空，可点 ☰ 列表里的「本地音乐」选择本地文件'); return; }
+        var token = _loadToken + 1;
+        loadTrack(randomIndex()).then(function () {
+          if (_loadToken !== token) return;
+          play();
+        });
         notifySongChange();
         return;
       }
@@ -1413,6 +1990,11 @@
     // === 初始化 UI ===
     updateModeUI();
     updateVolumeUI(volume);
+    updateTabUI();        // 标签选中态 + 计数（默认本地列表）
+    updateTabCounts();
+
+    // 异步恢复上次导入的本地音乐：不阻塞上面的 init，接口先就绪、曲目晚到
+    restoreLocalMusic();
 
     // === 键盘快捷键 ===
     document.addEventListener('keydown', function (e) {
@@ -1478,6 +2060,13 @@
         if (v < 0.005) { _isMuted = true; _volumeBeforeMute = 0.05; localStorage.setItem('gy_muted', '1'); }
       } catch (_err) {}
     };
+    // 本地音乐只读查询：曲目数、当前浏览器能否跨会话保留、设置面板信息同步
+    window.__gyMusic.getLocalCount = function () { return localTracks.length; };
+    window.__gyMusic.canPersistLocal = function () {
+      return _localMusic ? _localMusic.canPersist() : false;
+    };
+    // 设置面板每次打开时调用：刷新"当前来源 + 曲目数"与降级提示
+    window.__gyMusic.syncSettingsUI = function () { syncSettingsLocalUI(); };
   }
 
   // ==================== 4. 云层鼠标视差 ====================
@@ -1773,6 +2362,33 @@
     });
   }
 
+  // ==================== 整页滚轮动量滚动 ====================
+
+  /**
+   * 整页滚动接管鼠标滚轮，手感与播放列表一致（参数同源，见 js/smoothScroll.js）。
+   * 播放列表与设置面板各有自己的滚动手感，这里遇到就放行；
+   * 设置面板打开期间页面让位，由面板接管内部滚动、遮罩区由 settings.js 拦截。
+   */
+  function initSmoothScroll() {
+    if (!window.__gySmoothScroll) return;
+    var scroller = document.scrollingElement || document.documentElement;
+    if (!scroller) return;
+
+    window.__gySmoothScroll.attach(scroller, {
+      listenTarget: window,
+      physics: CONFIG.pageScroll,   // 整页步长比播放列表大一档，惯性形状不变
+      isActive: function () {
+        var ov = document.getElementById('settings-overlay');
+        return !(ov && !ov.hidden);
+      },
+      skip: function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return false;
+        return !!t.closest('.playlist-inner, .settings-body');
+      }
+    });
+  }
+
   // ==================== 启动 ====================
 
   function init() {
@@ -1784,6 +2400,7 @@
     initMusic();
     initSocialButtons();
     initVisitor();
+    initSmoothScroll();
   }
 
   // DOMContentLoaded 或直接执行

@@ -502,21 +502,6 @@
       return isLeap ? 29 : 28;
     }
 
-    /** 日期星点可见性：未选日时只显示稀疏的关键日期（1 / 每 5 天 / 月末）
-     *  选中或滑动时，以当前日为中心 ±2 天的窗口浮现，其余淡出——滑到哪亮到哪 */
-    var STAR_VISIBLE_RADIUS = 2;
-    var STAR_KEY_STEP = 5;
-    function updateStarVisibility(center) {
-      var n = _selDays();
-      for (var i = 0; i < starDay.length; i++) {
-        var d = i + 1;
-        var near = center > 0
-          ? Math.abs(d - center) <= STAR_VISIBLE_RADIUS
-          : (d === 1 || d % STAR_KEY_STEP === 0 || d === n);
-        starDay[i].classList.toggle('faint', !near);
-      }
-    }
-
     /**
      * 重建日期弧（外弧）— 一条完整细线 + 星点 + 今日点。
      * animate=true：日期数字从弧线上沿径向依次升起（松手收尾等一次性切换）；
@@ -544,7 +529,7 @@
       arcLine.setAttribute('class', 'trail-day-line');
       dayArc.appendChild(arcLine);
 
-      // 全部日期星点（可见性由 updateStarVisibility 控制；换月时沿弧依次点亮）
+      // 全部日期星点 — 常显（不随选中状态淡出；换月时沿弧依次点亮）
       for (var d = 1; d <= n; d++) {
         var pos = dayToPos(d, n);
         var sc = document.createElementNS(NS, 'circle');
@@ -590,9 +575,6 @@
         tc.setAttribute('fill', '#FFF3CE');
         dayArc.appendChild(tc);
       }
-
-      // 初始稀疏显示（未选中任何日期）
-      updateStarVisibility(0);
     }
 
     // 初始：默认选中 1 月（金色光点落在 1 月节点），日期弧显示 1 月
@@ -705,8 +687,6 @@
       if (_activeLabel) _activeLabel.classList.remove('active');
       _activeLabel = dayLabels[d - 1] || null;
       if (_activeLabel) _activeLabel.classList.add('active');
-      // 以当前所选日为中心展开可见窗口（周边日期浮现，其余淡出）
-      updateStarVisibility(d);
 
       hintEl.textContent = _selMonth + '月' + d + '日 · ' + sign.nameCN;
       if (oracleEl) {
@@ -821,6 +801,9 @@
       var sign = getZodiacSign(_selMonth, _selDay);
       orbitState.activeSignIndex = findConstellationIndex(sign.nameCN);
       _updateGlow(orbitState.activeSignIndex, 3);
+      // 上一个星座的退场若还没走完，立即收尾，避免与新揭晓的描画互相打架
+      var confCo = CONSTELLATIONS[orbitState.activeSignIndex];
+      if (confCo) { confCo._dismissPhase = 0; confCo._dismissFade = 0; confCo._revealHold = null; }
       if (typeof window._spawnCelebrate === 'function') window._spawnCelebrate(orbitState.activeSignIndex);
       coreGroup.classList.add('confirmed');
       coreInner.setAttribute('fill', '#F6C660');
@@ -836,23 +819,39 @@
     }
     confirmBtn.addEventListener('click', doConfirm);
 
-    /* ---- 引导光束：鼠标悬停在确认选择按钮上时，从按钮位置射向所选星座；
-       离开按钮即移除（键盘 focus/blur 同理） ---- */
-    confirmBtn.addEventListener('mouseenter', function () {
-      fireStarBeam(false);
-    });
-    confirmBtn.addEventListener('mouseleave', function () {
-      if (typeof window._clearStarBeam === 'function') window._clearStarBeam();
-    });
+    /* ---- 引导光束：鼠标进入「确认区」（确认按钮 + 其四周留白）即从按钮射向所选星座，
+       并一直连着不自行消散，直到点下确认（转金光闪一次）或离开确认区；键盘 focus/blur 同理 ---- */
+    var actionsEl = document.getElementById('tarot-actions');
+    if (actionsEl) {
+      actionsEl.addEventListener('mouseenter', function () {
+        if (!orbitState.confirmed) fireStarBeam(false, true);
+      });
+      actionsEl.addEventListener('mouseleave', function () {
+        // 揭晓后（按钮已隐藏）的金光走自己的闪灭节奏，不受指针移出影响
+        if (orbitState.confirmed) return;
+        if (typeof window._clearStarBeam === 'function') window._clearStarBeam();
+      });
+    }
     confirmBtn.addEventListener('focus', function () {
-      fireStarBeam(false);
+      fireStarBeam(false, true);
     });
     confirmBtn.addEventListener('blur', function () {
+      // 指针仍停在确认区内：保留待机光束，交给 mouseleave 收尾
+      if (actionsEl && actionsEl.matches(':hover')) return;
       if (typeof window._clearStarBeam === 'function') window._clearStarBeam();
     });
 
-    /* ---- 重置（仅由「重新选择」按钮 / 日夜切换触发，无自动复位） ---- */
-    function resetState() {
+    /* ---- 重置（仅由「重新选择」按钮 / 日夜切换触发，无自动复位）
+       exitAnim = 来自「重新选择」：点亮中的星座按入场逆序退场——连线从最后一条起逐条回缩，星点辉光随后落尽 ---- */
+    function resetState(exitAnim) {
+      // 先记下揭晓中的星座再清状态——退场凭这两个标记继续跑完
+      var litIndex = exitAnim ? orbitState.activeSignIndex : -1;
+      if (litIndex >= 0 && CONSTELLATIONS[litIndex] && (CONSTELLATIONS[litIndex].glowLevel || 0) > 0) {
+        CONSTELLATIONS[litIndex]._dismissPhase = 1; // 1 = 连线逆序回缩（星点保持点亮）
+        CONSTELLATIONS[litIndex]._dismissGlow = CONSTELLATIONS[litIndex].glowLevel;
+        CONSTELLATIONS[litIndex]._dismissFade = 0;
+        CONSTELLATIONS[litIndex]._revealHold = null;
+      }
       _selMonth = 1;          // 重置回默认态：1 月（与初始一致）
       _selDay = 0;
       orbitState.month = 0;
@@ -887,7 +886,7 @@
 
     /* ---- 重新选择按钮 ---- */
     resultEl.addEventListener('click', function (e) {
-      if (e.target && (e.target.id === 'orbit-redo' || (e.target.parentNode && e.target.parentNode.id === 'orbit-redo'))) resetState();
+      if (e.target && (e.target.id === 'orbit-redo' || (e.target.parentNode && e.target.parentNode.id === 'orbit-redo'))) resetState(true);
     });
 
     /* ---- 初始提示 8s 后渐隐 ---- */
@@ -919,55 +918,68 @@
   }
 
 
-  /** 引导光束 — 月日选齐时从星环射向星图上对应星座（Canvas 绘制，闪烁后消散） */
-  function fireStarBeam(gold) {
+  /** 引导光束 — 星环射向星图上对应星座（Canvas 绘制，闪烁后消散）
+   *  hold = 悬停期间的待机光束：连上后一直亮着，直到离开或确认 */
+  function fireStarBeam(gold, hold) {
     if (orbitState.month > 0 && orbitState.day > 0 && typeof window._spawnStarBeam === 'function') {
-      window._spawnStarBeam(orbitState.activeSignIndex, gold);
+      window._spawnStarBeam(orbitState.activeSignIndex, gold, hold);
     }
   }
 
 
   // ==================== 3. 星空粒子网络 ====================
 
-  // 12 黄道星座 — 星点/折线取自经典星座绘图数据（0~1 等比画布坐标，lines 为折线笔画）
-  // generate() 时按真实屏幕尺寸等比缩放到各自锚点块内，任何屏幕形状不变形
+  // 12 黄道星座 — 官方星座连线数据（Stellarium 现代天球星空文化），球心投影后两轴同比归一：
+  // 形状/比例/连线拓扑与真实星空一致，pts 为 0~1 等比坐标，lines 为折线笔画，mags 为该点真实星等
   var CONSTELLATION_SHAPES = {
     '白羊座': {
-      pts: [[0.30,0.78],[0.34,0.66],[0.28,0.48],[0.60,0.26],[0.65,0.20],[0.71,0.23],[0.70,0.32],[0.72,0.36]],
-      lines: [[0,1,2,3,4,5],[3,6,7]] },
+      pts: [[0,0], [0.7472,0.3221], [0.9763,0.5247], [1,0.6422]],
+      lines: [[0,1,2,3]],
+      mags: [3.61, 2.01, 2.64, 3.88] },
     '金牛座': {
-      pts: [[0.29,0.21],[0.39,0.36],[0.50,0.51],[0.50,0.57],[0.61,0.63],[0.77,0.71],[0.79,0.79],[0.22,0.43],[0.39,0.57],[0.60,0.71],[0.67,0.76]],
-      lines: [[0,1,2,3,4,5,6],[7,8,3],[4,9,10]] },
+      pts: [[0,0.2343], [0.4618,0.4157], [0.5149,0.4364], [0.58,0.4445], [0.5574,0.3859], [0.5168,0.335], [0.1095,0], [0.7218,0.5396], [0.9803,0.6183], [0.7058,0.74], [1,0.6397], [0.9169,0.9171]],
+      lines: [[0,1,2,3,4,5,6], [3,7,8,9], [8,10,11]],
+      mags: [2.97, 0.87, 3.4, 3.65, 3.77, 3.53, 1.65, 3.41, 3.73, 3.91, 3.61, 4.29] },
     '双子座': {
-      pts: [[0.18,0.37],[0.25,0.45],[0.35,0.55],[0.39,0.68],[0.49,0.77],[0.51,0.63],[0.57,0.78],[0.28,0.29],[0.42,0.32],[0.61,0.49],[0.72,0.60],[0.83,0.59],[0.69,0.75],[0.22,0.54],[0.35,0.43],[0.48,0.21]],
-      lines: [[0,1,2,3,4],[2,5,6],[7,8,9,10,11],[9,12],[13,1,14,8,15]] },
+      pts: [[1,0.4457], [0.9071,0.4523], [0.6655,0.3375], [0.3706,0.092], [0.1269,0], [0,0.1817], [0.0994,0.2448], [0.2647,0.4911], [0.4442,0.5618], [0.753,0.7598], [0.6694,0.9357], [0.281,0.7563]],
+      lines: [[0,1,2,3,4,5,6,7,8,9,10], [7,11]],
+      mags: [3.31, 2.87, 3.06, 4.41, 1.58, 1.16, 4.06, 3.5, 4.01, 1.93, 3.35, 3.58] },
     '巨蟹座': {
-      pts: [[0.16,0.39],[0.27,0.36],[0.52,0.49],[0.57,0.65],[0.83,0.78],[0.44,0.21]],
-      lines: [[0,1,2,3,4],[2,5]] },
+      pts: [[0,0.8637], [0.1735,0.5447], [0.1906,0.3765], [0.1529,0], [0.5299,1]],
+      lines: [[0,1,2,3], [1,4]],
+      mags: [4.26, 3.94, 4.66, 4.03, 3.53] },
     '狮子座': {
-      pts: [[0.16,0.75],[0.23,0.67],[0.39,0.77],[0.71,0.53],[0.64,0.39],[0.55,0.37],[0.47,0.27],[0.54,0.24],[0.60,0.27],[0.85,0.56]],
-      lines: [[0,1,2,3,4,5,6,7,8],[3,9]] },
+      pts: [[0.8371,0.476], [0.8408,0.3151], [0.7386,0.2149], [0.314,0.1805], [0,0.3606], [0.3019,0.3521], [0.7622,0.0954], [0.9422,0], [1,0.0718]],
+      lines: [[0,1,2,3,4,5,0], [2,6,7,8]],
+      mags: [1.36, 3.48, 2.01, 2.56, 2.14, 3.33, 3.43, 3.88, 2.97] },
     '处女座': {
-      pts: [[0.16,0.59],[0.35,0.63],[0.44,0.70],[0.62,0.51],[0.77,0.46],[0.84,0.37],[0.60,0.42],[0.65,0.26],[0.34,0.75]],
-      lines: [[0,1,2,3,4,5],[3,6,7],[2,8]] },
+      pts: [[1,0.0852], [0.9701,0.1942], [0.8018,0.2482], [0.6835,0.2646], [0.534,0.3503], [0.4542,0.4708], [0.1795,0.3649], [0.0207,0.3625], [0.575,0], [0.6096,0.1622], [0.4039,0.2464], [0.2589,0.2007], [0,0.1906]],
+      lines: [[0,1,2,3,4,5,6,7], [8,9,3], [4,10,11,12]],
+      mags: [4.04, 3.59, 3.89, 2.74, 4.38, 0.98, 4.07, 3.87, 2.85, 3.39, 3.38, 4.23, 3.73] },
     '天秤座': {
-      pts: [[0.16,0.67],[0.34,0.60],[0.60,0.27],[0.75,0.23],[0.84,0.47],[0.63,0.74],[0.51,0.78]],
-      lines: [[0,1,2,3,4,5,6]] },
+      pts: [[0.3736,0.7756], [0.5373,0.3315], [0.233,0], [0.0154,0.2674], [0.0153,0.9175], [0,1]],
+      lines: [[0,1,2,3,4,5], [1,3]],
+      mags: [3.25, 2.75, 2.61, 3.91, 3.6, 3.66] },
     '天蝎座': {
-      pts: [[0.17,0.50],[0.28,0.63],[0.19,0.70],[0.28,0.78],[0.41,0.77],[0.49,0.72],[0.57,0.55],[0.59,0.44],[0.69,0.31],[0.74,0.21],[0.82,0.29],[0.79,0.44],[0.73,0.50],[0.38,0.47]],
-      lines: [[0,1,2,3,4,5,6,7,8,9,10,11,12],[1,13],[8,11]] },
+      pts: [[0.9463,0.2787], [0.9482,0.1271], [0.9089,0], [0.734,0.2421], [0.6545,0.2747], [0.592,0.3482], [0.4636,0.6012], [0.4515,0.7583], [0.4333,0.9415], [0.2983,0.9867], [0.1004,1], [0,0.8906], [0.0357,0.8367], [0.1003,0.7444]],
+      lines: [[0,1,2], [1,3,4,5,6,7,8,9,10,11,12,13]],
+      mags: [2.89, 2.29, 2.56, 2.9, 1.06, 2.82, 2.29, 3, 3.62, 3.32, 1.86, 2.99, 2.39, 1.62] },
     '射手座': {
-      pts: [[0.22,0.66],[0.24,0.51],[0.45,0.40],[0.54,0.37],[0.59,0.43],[0.66,0.50],[0.63,0.60],[0.66,0.67],[0.74,0.53],[0.77,0.39],[0.49,0.47],[0.29,0.68],[0.30,0.78],[0.48,0.21],[0.52,0.27],[0.59,0.29]],
-      lines: [[0,1,2,3,4,5,6,7,8,9],[2,10,11,12],[10,4],[13,14,15,3],[14,3]] },
+      pts: [[0.7304,0.7332], [0.6903,0.6453], [0.7256,0.4895], [0.6827,0.334], [0.809,0.19], [0.2909,1], [0.2758,0.8598], [0.4151,0.4795], [0.5436,0.382], [0.0687,0.9306], [0.0084,0.6988], [0,0.3812], [0.1473,0.3186], [0.2366,0.3004], [0.3138,0.3232], [0.4705,0.357], [0.839,0.5217], [0.3818,0.4043], [0.3966,0.2005], [0.3555,0.1762], [0.2893,0.1053], [0.2543,0.0673], [0.2507,0], [0.4522,0.1784], [0.4802,0.2351]],
+      lines: [[0,1,2,3,4], [5,6,7,8,3], [9,10,11,12,13,14,15,8,2,16,1,7,17,15,18,19,20,21,22], [18,23,24,15]],
+      mags: [3.1, 1.79, 2.72, 2.82, 3.84, 3.96, 3.96, 2.6, 3.17, 4.12, 4.37, 4.7, 4.59, 5.02, 4.86, 2.05, 2.98, 3.32, 3.76, 2.88, 4.88, 3.92, 4.52, 3.52, 4.86] },
     '摩羯座': {
-      pts: [[0.78,0.21],[0.78,0.34],[0.75,0.45],[0.75,0.70],[0.69,0.78],[0.31,0.66],[0.22,0.49],[0.30,0.53],[0.53,0.54]],
-      lines: [[0,1,2,3,4,5,6,7,8,1]] },
+      pts: [[1,0], [0.9563,0.1041], [0.8628,0.2402], [0.6697,0.5773], [0.6096,0.653], [0.2414,0.4525], [0,0.1748], [0.0805,0.1952], [0.2797,0.1945], [0.4587,0.2087]],
+      lines: [[0,1,2,3,4,5,6,7,8,9,0]],
+      mags: [4.3, 3.05, 4.77, 4.13, 4.12, 3.77, 2.85, 3.69, 4.28, 4.08] },
     '水瓶座': {
-      pts: [[0.45,0.21],[0.37,0.35],[0.27,0.51],[0.30,0.58],[0.29,0.64],[0.48,0.79],[0.51,0.71],[0.58,0.68],[0.73,0.74],[0.43,0.53],[0.53,0.47]],
-      lines: [[0,1,2,3,4,5,6,7,8],[2,9,10]] },
+      pts: [[1,0.264], [0.9683,0.2495], [0.7339,0.16], [0.5399,0.0387], [0.4503,0.0629], [0.4099,0.0319], [0.3731,0.0341], [0.2778,0.2032], [0.1339,0.2436], [0.1903,0.5214], [0.5334,0.3438], [0.477,0.2064], [0.4299,0], [0.113,0.5019], [0,0.4573]],
+      lines: [[0,1,2,3,4,5,6,7,8,9], [2,10], [3,11], [5,12], [13,8,14]],
+      mags: [3.78, 4.73, 2.9, 2.95, 3.86, 3.65, 4.04, 3.73, 4.41, 3.68, 4.29, 4.17, 4.8, 3.96, 4.82] },
     '双鱼座': {
-      pts: [[0.28,0.43],[0.28,0.53],[0.36,0.73],[0.43,0.78],[0.50,0.70],[0.53,0.62],[0.57,0.58],[0.63,0.43],[0.67,0.39],[0.74,0.39],[0.77,0.34],[0.72,0.30],[0.75,0.22],[0.23,0.50],[0.66,0.33]],
-      lines: [[0,1,2,3,4,5,6,7,8,9,10,11,12],[0,13,1],[8,14,11]] }
+      pts: [[0.2948,0.1293], [0.3092,0], [0.2675,0.0642], [0.3043,0.2104], [0.1934,0.3294], [0.1086,0.4615], [0,0.603], [0.0526,0.5943], [0.1271,0.5441], [0.1918,0.5313], [0.2836,0.5024], [0.3418,0.4969], [0.4174,0.5044], [0.6791,0.5184], [0.7861,0.5431], [0.8531,0.5246], [0.8984,0.5455], [0.92,0.5925], [0.8649,0.6392], [0.7777,0.628], [0.752,0.5906], [1,0.5784]],
+      lines: [[0,1,2,0,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,14], [17,21]],
+      mags: [4.67, 4.51, 4.74, 4.66, 3.62, 4.26, 3.82, 4.61, 4.45, 4.84, 5.21, 4.27, 4.44, 4.03, 4.13, 4.27, 5.05, 3.7, 4.95, 4.49, 4.95, 4.48] }
   };
 
   /** 生成星座锚点 — 动态计算以支持 resize 时切换布局 */
@@ -1003,8 +1015,14 @@
         if (shape.pts[p][1] < minV) minV = shape.pts[p][1];
         if (shape.pts[p][1] > maxV) maxV = shape.pts[p][1];
       }
+      // 亮星标记（≤2 等）：发光半径额外放大的那几颗
+      var mags = shape.mags || [];
+      var bright = [];
+      for (var b = 0; b < mags.length; b++) {
+        if (mags[b] <= 2) bright.push(b);
+      }
       out.push({
-        name: order[i], pts: shape.pts, edges: edges, bright: [],
+        name: order[i], pts: shape.pts, edges: edges, mags: mags, bright: bright,
         anchor: [0.5, 0.5], // 占位，generate() 时重新赋值
         minU: minU, minV: minV, fw: (maxU - minU) || 1, fh: (maxV - minV) || 1
       });
@@ -1195,13 +1213,27 @@
     // 暴露给星轨（initStarTrail）调用
     window._spawnCelebrate = spawnCelebrate;
 
-    // 星环 → 星座 引导光束（月日选齐/确认时闪现一次后消散）
-    var starBeams = []; // [{x1,y1,x2,y2, life, maxLife, gold}]
+    // 星环 → 星座 引导光束（悬停确认区期间常亮 / 确认时金光闪一次后消散）
+    var starBeams = []; // [{x1,y1,x2,y2, life, maxLife, t, gold, hold, constIndex}]
+
+    /** 确认按钮中心 → Canvas 坐标（按钮隐藏时返回 null） */
+    function beamOrigin() {
+      var btn = document.getElementById('tarot-confirm');
+      if (!btn) return null;
+      var bRect = btn.getBoundingClientRect();
+      if (!bRect.width && !bRect.height) return null; // 按钮已隐藏
+      var sRect = section.getBoundingClientRect();
+      return {
+        x: bRect.left + bRect.width / 2 - sRect.left,
+        y: bRect.top + bRect.height / 2 - sRect.top
+      };
+    }
 
     /** 从「确认选择」按钮中心射向对应星座中心的光束（手机端不生成）。
      *  仅夜间模式（_canvasVisible）；替换式：新光束生成时清掉旧光束——
-     *  任何时刻最多一条，避免多条线叠加。 */
-    function spawnStarBeam(constIndex, gold) {
+     *  任何时刻最多一条，避免多条线叠加。
+     *  hold = 待机光束：不自行衰减，只在原地呼吸；同目标重复调用不重建，保持已延伸的长度。 */
+    function spawnStarBeam(constIndex, gold, hold) {
       if (!_fxStarfield) return; // 星空特效关闭：不生成引导光束
       if (isMobileViewport()) return; // 手机端无引导光束
       if (!_canvasVisible) return; // 白天模式无星空背景：不生成光束（避免 starBeams 只增不减）
@@ -1214,15 +1246,14 @@
       var tx = 0, ty = 0;
       for (var n = 0; n < nodes.length; n++) { tx += nodes[n].cx; ty += nodes[n].cy; }
       tx /= nodes.length; ty /= nodes.length;
-      // 起点：确认选择按钮中心，DOM 矩形换算到 Canvas 坐标
-      var btn = document.getElementById('tarot-confirm');
-      if (!btn) return;
-      var sRect = section.getBoundingClientRect();
-      var bRect = btn.getBoundingClientRect();
-      var sx = bRect.left + bRect.width / 2 - sRect.left;
-      var sy = bRect.top + bRect.height / 2 - sRect.top;
+      var origin = beamOrigin();
+      if (!origin) return;
       starBeams.length = 0; // 替换旧光束
-      starBeams.push({ x1: sx, y1: sy, x2: tx, y2: ty, life: 1300, maxLife: 1300, gold: !!gold });
+      starBeams.push({
+        x1: origin.x, y1: origin.y, x2: tx, y2: ty,
+        life: 1300, maxLife: 1300, t: 0,
+        gold: !!gold, hold: !!hold, constIndex: constIndex
+      });
     }
     // 暴露给星轨（initStarTrail）调用
     window._spawnStarBeam = spawnStarBeam;
@@ -1239,11 +1270,13 @@
           constellationLines[cli].reveal = 0;
         }
       }
-      // 清除 _revealHold / _glowDismiss
+      // 清除 _revealHold / 退场标记
       if (typeof CONSTELLATIONS !== 'undefined') {
         for (var conj = 0; conj < CONSTELLATIONS.length; conj++) {
           CONSTELLATIONS[conj]._revealHold = null;
-          CONSTELLATIONS[conj]._glowDismiss = 0;
+          CONSTELLATIONS[conj]._dismissPhase = 0;
+          CONSTELLATIONS[conj]._dismissGlow = 0;
+          CONSTELLATIONS[conj]._dismissFade = 0;
         }
       }
     };
@@ -1282,6 +1315,7 @@
         co.anchor = anchors[c];
         var pts = co.pts;
         var brightSet = co.bright || [];
+        var mags = co.mags || [];
         // 锚点块（像素）：聚在星环左右两侧附近，块间允许交叠
         var bx = co.anchor[0] * W;
         var by = co.anchor[1] * H;
@@ -1296,14 +1330,17 @@
           for (var bi = 0; bi < brightSet.length; bi++) {
             if (brightSet[bi] === p) { isBright = true; break; }
           }
+          // 真实星等 → 星点大小/亮度（1 等 ≈ r1.9、α0.8；6 等 ≈ r0.7、α0.3）
+          var mag = (mags && mags[p] != null) ? mags[p] : 4.5;
+          var mt = Math.max(0, Math.min(1, (6 - mag) / 5.5));
           cNodes.push({
             rx: (ox + (pts[p][0] - co.minU) * k) / W,
             ry: (oy + (pts[p][1] - co.minV) * k) / H,
             cx: 0, cy: 0,
             constIndex: c,
             vx: 0, vy: 0,
-            r: isBright ? 1.5 + Math.random() * 0.7 : 0.8 + Math.random() * 1.0,
-            baseAlpha: isBright ? 0.5 + Math.random() * 0.2 : 0.3 + Math.random() * 0.3,
+            r: 0.7 + mt * 1.3,
+            baseAlpha: 0.3 + mt * 0.5,
             twinkleSpeed: 0.002 + Math.random() * 0.01,
             twinkleOffset: Math.random() * Math.PI * 2,
             bright: isBright,
@@ -1344,6 +1381,14 @@
         if (_fxStarfield && !document.hidden && W > 0 && _canvasVisible) spawnMeteor();
         scheduleMeteor();
       }, delay);
+    }
+
+    /** 退场星座的连线是否已全部收回（用于从"逆序回缩"切到"辉光收尾"） */
+    function linesRetracted(ci) {
+      for (var i = 0; i < constellationLines.length; i++) {
+        if (constellationLines[i].constIndex === ci && constellationLines[i].reveal > 0) return false;
+      }
+      return true;
     }
 
     var _starLastTs = null;
@@ -1394,21 +1439,34 @@
           n.cx += n.vx * k; n.cy += n.vy * k;
 
           // 发光等级平滑趋近 — 激活时星点从星空中缓缓浮现，取消时缓缓隐没
-          var tg = CONSTELLATIONS[n.constIndex].glowLevel || 0;
+          // 退场回缩阶段以点亮时的旧值为目标：线还没收完，星图不该先暗下去
+          var nCo = CONSTELLATIONS[n.constIndex];
+          var tg = nCo._dismissPhase === 1 ? (nCo._dismissGlow || 0) : (nCo.glowLevel || 0);
           n.glowSmooth += (tg - n.glowSmooth) * Math.min(1, 0.06 * k);
         }
       }
 
-      // 星座连线描画：确认后延迟片刻（等引导光束到达）开始逐笔勾勒；取消后渐隐
-      // 退场动画：_glowDismiss > 0 时连线呈现金色回缩退场（反向描画），不与正常 reveal 逻辑冲突
+      // 星座连线描画：确认后延迟片刻（等引导光束到达）开始逐笔勾勒
+      // 退场（_dismissPhase）：1 = 连线按入场逆向逐条回缩、星点保持点亮 → 2 = 辉光收尾
       // 手机端跳过连线描画状态更新（连线/光束/节点均不绘制）
       if (!isMobileViewport() && _canvasVisible) {
         for (var ch = 0; ch < CONSTELLATIONS.length; ch++) {
           var co = CONSTELLATIONS[ch];
-          // 退场动画光泽衰减
-          if (co._glowDismiss) {
-            co._glowDismiss = Math.max(0, co._glowDismiss - 0.012 * k);
-            continue; // 退场中，跳过正常 reveal 逻辑
+          if (co._dismissPhase === 1) {
+            if (linesRetracted(ch)) {
+              // 收笔后与入场"等光束到达"对称地停一拍，星点再落下去
+              if (co._revealHold == null) co._revealHold = 26; // ~430ms，与入场同一时长
+              else if (co._revealHold > 0) { co._revealHold -= k; continue; }
+              co._dismissPhase = 2; // 转入辉光收尾：星点辉光按入场同速率回落
+              co._dismissGlow = 0;
+              co._dismissFade = 1;
+            }
+            continue;
+          }
+          if (co._dismissPhase === 2) {
+            co._dismissFade = Math.max(0, co._dismissFade - 0.02 * k); // ≈0.83s，与入场星点浮现同长
+            if (co._dismissFade <= 0) co._dismissPhase = 0;
+            continue;
           }
           if ((co.glowLevel || 0) >= 3) {
             if (co._revealHold == null) co._revealHold = 26; // ~430ms（60Hz 基准）
@@ -1417,17 +1475,17 @@
             co._revealHold = null;
           }
         }
-        for (var lr = 0; lr < constellationLines.length; lr++) {
+        for (var lr = constellationLines.length - 1; lr >= 0; lr--) {
           var ln = constellationLines[lr];
           var lco = CONSTELLATIONS[ln.constIndex];
-          // 退场动画中的连线：反向链式回缩，对称于入场描画速度
-          // 入场是 preview 链（前一根 ≥65% 后启动下一根），退场反过来——后画的线先缩完
-          if (lco._glowDismiss) {
-            // 退场留的残影足够长，不需要链式等待——全线同时以入场速度回缩
-            ln.reveal = Math.max(0, ln.reveal - 0.055 * k);
-            continue;
-          }
-          if ((lco.glowLevel || 0) >= 3 && lco._revealHold === 0) {
+          if (lco._dismissPhase === 1) {
+            // 逆序链式回缩：入场是"前一条画过 65% 本条才动笔"，退场反过来——后画的那条先收回 65%，前一条才开始
+            var nextLn = lr + 1 < constellationLines.length && constellationLines[lr + 1].constIndex === ln.constIndex
+              ? constellationLines[lr + 1] : null;
+            if (!nextLn || nextLn.reveal < 0.35 - (Math.random() * 0.04)) {
+              ln.reveal = Math.max(0, ln.reveal - 0.055 * k);
+            }
+          } else if ((lco.glowLevel || 0) >= 3 && lco._revealHold <= 0) {
             // 链式描画：同星座内前一条线画过 65% 后，本条才动笔（加微小随机延迟，增加手绘感）
             var prevLn = lr > 0 && constellationLines[lr - 1].constIndex === ln.constIndex
               ? constellationLines[lr - 1] : null;
@@ -1458,9 +1516,10 @@
         canvas.style.display = '';
       }
 
-      // 引导光束衰减（仅夜间模式）
+      // 引导光束衰减（仅夜间模式）；待机光束不计时，只在原地呼吸
       if (_canvasVisible) {
       for (var sbu = starBeams.length - 1; sbu >= 0; sbu--) {
+        if (starBeams[sbu].hold) { starBeams[sbu].t += 16 * k; continue; }
         starBeams[sbu].life -= 16 * k;
         if (starBeams[sbu].life <= 0) starBeams.splice(sbu, 1);
       }
@@ -1482,6 +1541,7 @@
       ctx.clearRect(0, 0, W, H);
 
       // 星座连线 — 未激活星座隐藏；手机端完全不画连线（夜间模式专属）
+      // 入场描画与退场回缩共用同一套画法（笔尖光点指向当前笔尖），退场即入场的倒放
       if (!isMobileViewport() && _canvasVisible) {
         ctx.lineWidth = 1;
         ctx.lineCap = 'round';
@@ -1489,77 +1549,49 @@
           var line = constellationLines[li];
           var lco3 = CONSTELLATIONS[line.constIndex];
           if (!lco3) continue;
-          var dismiss = lco3._glowDismiss || 0;
-          var isDismissing = dismiss > 0;
-          // 退场模式：即使 reveal 归零也继续渲染末端残留光点，直到辉光完全消散
-          if (!isDismissing && line.reveal <= 0) continue;
-          // 非退场时跳过未激活星座
-          if (!isDismissing && (lco3.glowLevel || 0) === 0) continue;
-        var na = cNodes[line.a];
-        var nb = cNodes[line.b];
-        if (!na || !nb) continue;
+          if (line.reveal <= 0) continue; // 未描画 / 已收回：不留残影
+          if ((lco3.glowLevel || 0) === 0 && !lco3._dismissPhase) continue; // 未激活星座隐藏
+          var na = cNodes[line.a];
+          var nb = cNodes[line.b];
+          if (!na || !nb) continue;
 
-        var lex = na.cx + (nb.cx - na.cx) * line.reveal;
-        var ley = na.cy + (nb.cy - na.cy) * line.reveal;
+          var lex = na.cx + (nb.cx - na.cx) * line.reveal;
+          var ley = na.cy + (nb.cy - na.cy) * line.reveal;
 
-        if (isDismissing) {
-          // 退场连线：暖金辉光 + dissolve 粒子感
-          var drawLine = line.reveal > 0;
-          ctx.lineWidth = 1.2;
-          ctx.shadowColor = 'rgba(240, 192, 96, ' + (0.6 * dismiss) + ')';
-          ctx.shadowBlur = 4 * dismiss;
-
-          if (drawLine) {
+          ctx.beginPath();
+          ctx.moveTo(na.cx, na.cy);
+          ctx.lineTo(lex, ley);
+          ctx.strokeStyle = 'rgba(240, 210, 150, ' + (0.2 + 0.5 * line.reveal) + ')';
+          ctx.stroke();
+          // 笔尖光点
+          if (line.reveal < 1) {
             ctx.beginPath();
-            ctx.moveTo(na.cx, na.cy);
-            ctx.lineTo(lex, ley);
-            ctx.strokeStyle = 'rgba(240, 192, 96, ' + (0.7 * dismiss) + ')';
-            ctx.stroke();
+            ctx.arc(lex, ley, 1.8, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(250, 225, 170, 0.9)';
+            ctx.fill();
           }
-
-          // 末端光点弥散放大 → 缩小淡出（reveal 归零后仅残留光点，持续到辉光完全消散）
-          var dotR = 1.8 + 3 * (1 - dismiss) + (drawLine ? 0.3 : 1.5 * (1 - dismiss));
-          var dotAlpha = drawLine
-            ? 0.8 * dismiss
-            : 0.5 * dismiss; // 线消失后光点继续衰减
-          ctx.beginPath();
-          ctx.arc(lex, ley, dotR, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(250, 225, 170, ' + dotAlpha + ')';
-          ctx.fill();
-
-          // 重置 shadow 和 lineWidth
-          ctx.shadowColor = 'transparent';
-          ctx.shadowBlur = 0;
-          ctx.lineWidth = 1;
-        } else {
-        ctx.beginPath();
-        ctx.moveTo(na.cx, na.cy);
-        ctx.lineTo(lex, ley);
-        ctx.strokeStyle = 'rgba(240, 210, 150, ' + (0.2 + 0.5 * line.reveal) + ')';
-        ctx.stroke();
-        // 描画笔尖光点
-        if (line.reveal < 1) {
-          ctx.beginPath();
-          ctx.arc(lex, ley, 1.8, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(250, 225, 170, 0.9)';
-          ctx.fill();
         }
-        }
-      }
       } // end if 桌面端画连线
 
-      // 星环 → 星座 引导光束：延伸（前 28%）→ 闪烁 ~2.5 次 → 淡出（手机端不画，夜间模式专属）
+      // 星环 → 星座 引导光束：延伸（前 28%）→ 闪烁 → 淡出（手机端不画，夜间模式专属）
+      // 待机光束停在闪烁段不再推进，直到离开确认区或确认时替换为金光
       if (!isMobileViewport() && _canvasVisible) {
       for (var sbd = 0; sbd < starBeams.length; sbd++) {
         var bm = starBeams[sbd];
-        var bt = 1 - bm.life / bm.maxLife;
+        // 待机光束每帧咬住按钮中心（页面滚动/布局变化后不会与按钮脱节）
+        if (bm.hold) {
+          var bo = beamOrigin();
+          if (bo) { bm.x1 = bo.x; bm.y1 = bo.y; }
+        }
+        var bt = bm.hold ? Math.min(0.6, bm.t / bm.maxLife) : 1 - bm.life / bm.maxLife;
         var reach = Math.min(1, bt / 0.28);
         reach = 1 - (1 - reach) * (1 - reach); // ease-out 延伸
         var bAlpha;
         if (bt < 0.28) {
           bAlpha = 0.75;
         } else if (bt < 0.7) {
-          bAlpha = 0.35 + 0.45 * Math.abs(Math.sin((bt - 0.28) / 0.42 * Math.PI * 2.5));
+          var bPhase = bm.hold ? bm.t / 1400 : (bt - 0.28) / 0.42; // 待机光束用真实时间推进呼吸
+          bAlpha = 0.35 + 0.45 * Math.abs(Math.sin(bPhase * Math.PI * 2.5));
         } else {
           bAlpha = 0.8 * (1 - (bt - 0.7) / 0.3);
         }
@@ -1666,12 +1698,16 @@
         var nd = cNodes[m];
         // 手机端：跳过星座节点绘制（坐标仍保留供庆祝粒子/光束使用）
         if (isMobileViewport()) continue;
-        // glowLevel === 0 → 完全跳过，不留痕迹
-        var constGlow = CONSTELLATIONS[nd.constIndex] ? (CONSTELLATIONS[nd.constIndex].glowLevel || 0) : 0;
-        if (constGlow === 0) continue;
+        // glowLevel === 0 且不在退场中 → 完全跳过，不留痕迹（退场中的星座要画到辉光落尽）
+        var ndCo = CONSTELLATIONS[nd.constIndex];
+        var constGlow = ndCo ? (ndCo.glowLevel || 0) : 0;
+        var ndPhase = ndCo ? (ndCo._dismissPhase || 0) : 0;
+        if (constGlow === 0 && ndPhase === 0) continue;
         var g = nd.glowSmooth; // 0~3 连续插值
+        // 辉光收尾：星点亮度随辉光线性落尽（与入场星点浮现同长），避免最后一帧突兀消失
+        var ndFade = ndPhase === 2 ? (ndCo._dismissFade || 0) : 1;
         var ntw = 1 + Math.sin(timestamp * nd.twinkleSpeed + nd.twinkleOffset) * 0.2;
-        var nAlpha = Math.max(0.05, Math.min(0.85, nd.baseAlpha * ntw));
+        var nAlpha = Math.max(0.05, Math.min(0.85, nd.baseAlpha * ntw)) * ndFade;
 
         if (g < 0.04) {
           // 未激活：按自由粒子绘制，隐于星空不可辨
@@ -1686,7 +1722,7 @@
         var gold = g >= 2.5;
         var gCol = gold ? '240,192,96' : theme.rgb;
         var glowR = nd.r * (3 + g * 2.4) * (nd.bright ? 1.15 : 1);
-        var glowA = Math.min(0.9, 0.15 + g * 0.24);
+        var glowA = Math.min(0.9, 0.15 + g * 0.24) * ndFade;
         ctx.save();
         ctx.shadowBlur = glowR;
         ctx.shadowColor = 'rgba(' + gCol + ',' + glowA + ')';
