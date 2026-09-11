@@ -19,7 +19,7 @@ js/settings.js          — 设置面板（gy_settings 存储、齿轮按钮、�
 js/smoothScroll.js      — 滚轮动量滚动接管（整页 + 设置面板复用播放列表手感；暴露 window.__gySmoothScroll）
 js/localMusic.js        — 本地音乐存储层（双轨：FSA 句柄持久化 / 内存会话轨；暴露 window.__gyLocalMusic）
 generate_playlist.py    — 扫描 assets/music/ 生成 playlist.js（含 U+00A0 文件名警告）
-release/                — 构建输出目录（部署打包用，git 不跟踪，勿删）；已发布 sky-gap-v1.0.0/1.1.0/1.2.0.zip
+release/                — 构建输出目录（部署打包用，git 不跟踪，勿删）；已发布 sky-gap-v1.0.0/1.1.0/1.2.0/1.3.0.zip
 live2d/                 — 看板娘（autoload.js 入口 + waifu-tips.js + chunk/ + SDK + 双模型）
 assets/                 — 头像、apple-touch-icon、og-image、favicon、Twemoji 库、字体、音乐
 web.config              — IIS 缓存策略 + 安全头（CSP/HSTS 已启用）+ 压缩 + requestFiltering 屏蔽敏感路径；live2d/web.config 注册 .moc/.mtn MIME
