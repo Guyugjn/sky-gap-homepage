@@ -225,3 +225,8 @@ SVG 飞鱼三种模式（漫游/追逐光标/受惊逃跑），`transform: trans
 - **随机模式的历史栈只在索引有效时入栈**：切到另一个列表后 `currentIndex` 为 `-1`，压栈会让「上一首」弹出无效索引（没声音还弹空提示）。`playPrev` 会跳过失效索引；列表循环模式下 `-1` 回退到列表末尾，而不是 `(-1-1+N)%N` 算出的倒数第二首。
 - **`web.config` 屏蔽了敏感路径**：`requestFiltering/hiddenSegments` 拦 `.git`、`release`、`memory.md`、`README.md`、`generate_playlist.py`（返回 403.8），即使把项目目录整体拷到站点根也不会泄露源码历史与构建产物。新增同类文件时按 `remove` + `add` 的幂等写法加进 `hiddenSegments`。
 - **`avatar-ring` 的呼吸光晕分两层**：基础光晕常驻在 `.avatar-ring` 上，呼吸增强层是 `.avatar-ring::after` 的 `opacity` 动画（`ring-glow`），`ring-breathe` 只负责 `transform: scale`。**不要再把 `box-shadow` 写回 keyframes** —— 那会让整个头像环每帧重绘阴影。
+- **`assets/twemoji-72x72/` 是 Twemoji 主源**：生产经 307 落到 HTTP（非安全上下文），`index.html` 按 `isSecure` 分流后 twemoji base 就是本地目录 —— 这是主源、不是 CDN 备用，**删除会碎图**。
+- **`.gitignore` 只写规则、不写注释**：该文件会同步到公开仓库，注释会暴露被忽略内容的性质
+  - 不进 git 但**部署时必须上传**：`assets/music/*`（保留 `playlist.js`）、`assets/twemoji-72x72/`、`robots.txt`、`sitemap.xml`、`tools/`、`memory-tools.md`。
+  - `release/` 是部署打包目录，git 不跟踪，**勿删**。
+  - `robots.txt` 引用的 sitemap 为生产域名。
