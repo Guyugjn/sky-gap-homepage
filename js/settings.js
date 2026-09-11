@@ -138,8 +138,10 @@
     // 只给面板加 overscroll-behavior 拦不住：滚轮/按键落在遮罩空白、面板头部这些位置上时，
     // 事件照样冒泡给页面，表现为"面板在滚、主页面也被滚走"。
     // 这里只拦"不归面板管"的输入，不动页面任何布局与滚动位置。
+    // 面板整体都算"面板内"：标题行、面板内边距这些不在 .settings-body 里的位置，
+    // 滚轮也应交给面板处理 —— 否则会被下面的 preventDefault 吞掉，表现为滚了完全没反应
     function insideScroller(node) {
-      return !!(body && node && body.contains(node));
+      return !!(panel && node && panel.contains(node));
     }
 
     function onOverlayWheel(e) {

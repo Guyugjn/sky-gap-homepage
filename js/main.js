@@ -1006,14 +1006,22 @@
     function playPrev() {
       if (!totalTracks) { showToast('⚠️ 播放列表为空', 1500); return; }
       if (playMode === 2) {
-        // 随机模式：从历史栈弹出上一首真正播放过的曲目
-        if (playHistory.length === 0) {
+        // 随机模式：从历史栈弹出上一首真正播放过的曲目（跳过失效索引）
+        var prevIdx = -1;
+        while (playHistory.length) {
+          var candidate = playHistory.pop();
+          if (candidate >= 0 && candidate < totalTracks) { prevIdx = candidate; break; }
+        }
+        if (prevIdx < 0) {
           showToast('没有更早的播放记录了', 1500);
           return;
         }
-        currentIndex = playHistory.pop();
+        currentIndex = prevIdx;
       } else {
-        currentIndex = (currentIndex - 1 + totalTracks) % totalTracks;
+        // 当前曲目不在本列表（索引 -1）时，「上一首」回到列表末尾而不是倒数第二首
+        currentIndex = currentIndex < 0
+          ? totalTracks - 1
+          : (currentIndex - 1 + totalTracks) % totalTracks;
       }
       // 必须先等 src 落地再 play()：loadTrack 是异步的（本地曲目要取文件），
       // src 未赋值就 play 会立刻抛 AbortError，表现为"播放失败"
@@ -1036,9 +1044,13 @@
         return;
       }
       if (playMode === 2) {
-        // 随机：记录当前曲目到历史，再随机选下一首
-        if (playHistory.length >= MAX_HISTORY) playHistory.shift();
-        playHistory.push(currentIndex);
+        // 随机：记录当前曲目到历史，再随机选下一首。
+        // 只在索引有效时入栈 —— 切到另一个列表后当前曲目不在队列里（索引为 -1），
+        // 把它压栈会让「上一首」弹出无效索引，表现为点了没反应还弹一个空提示
+        if (currentIndex >= 0) {
+          if (playHistory.length >= MAX_HISTORY) playHistory.shift();
+          playHistory.push(currentIndex);
+        }
         currentIndex = randomIndex();
       } else {
         // 列表循环
@@ -1410,7 +1422,7 @@
       }
       var html = '';
       localTracks.forEach(function (entry, rowIndex) {
-        html += '<span class="playlist-item playlist-item--local" data-tid="' + escapeHtml(entry.id) + '" data-kind="local">' +
+        html += '<span class="playlist-item playlist-item--local" data-tid="' + escapeHtml(entry.id) + '" data-kind="local" data-index="' + rowIndex + '">' +
                 // 序号取列表位置：entry 是存储层条目（无序号字段），
                 // 而本地列表的顺序与 tracks 队列一致，二者序号必须相同
                 '<span class="pl-index">' + (rowIndex + 1) + '</span>' +
@@ -1428,7 +1440,7 @@
       }
       var html = '';
       for (var i = 0; i < playlist.length; i++) {
-        html += '<span class="playlist-item" data-tid="B' + encodeURIComponent(playlist[i]) + '" data-kind="builtin">' +
+        html += '<span class="playlist-item" data-tid="B' + encodeURIComponent(playlist[i]) + '" data-kind="builtin" data-index="' + i + '">' +
                 '<span class="pl-index">' + (i + 1) + '</span>' +
                 '<span class="pl-name">' + escapeHtml(playlist[i].replace(/\.mp3$/i, '')) + '</span>' +
                 '</span>';
@@ -1512,7 +1524,8 @@
     // 列表项索引 → scrollTop 居中定位（弹性动画）
     // 移动端：瞬时跳转定位，避免 rAF 弹簧动画持续写 scrollTop 与原生触摸滚动冲突（导致列表无法滑动）
     function scrollToListIndex(index) {
-      if (!listInner) return;
+      if (!listInner || !(index >= 0)) return;
+      // data-index 由 _localListHtml / _builtinListHtml 渲染时写入，与 tracks 队列下标一致
       var item = listInner.querySelector('.playlist-item[data-index="' + index + '"]');
       if (!item) return;
       var maxS = listInner.scrollHeight - listInner.clientHeight;
@@ -1562,9 +1575,11 @@
       listOpen = true;
       renderPlaylist();
 
-      // 桌面端：启用自定义动量滚动
+      // 桌面端：启用自定义动量滚动。
+      // 绑在面板容器而非列表本身 —— 标签栏、提示条、分隔线上的滚轮也应滚列表，
+      // 否则会冒泡给整页接管器，表现为"想滚列表结果页面被滚走"
       if (!isTouchDevice) {
-        listInner.addEventListener('wheel', onPlaylistWheel, { passive: false });
+        playlistEl.addEventListener('wheel', onPlaylistWheel, { passive: false });
       }
       // 移动端：完全交给原生滚动，不做任何拦截
 
@@ -1585,8 +1600,8 @@
       scrollSpring = false;
 
       // 移除事件
-      if (listInner) {
-        listInner.removeEventListener('wheel', onPlaylistWheel);
+      if (playlistEl) {
+        playlistEl.removeEventListener('wheel', onPlaylistWheel);
       }
     }
 
@@ -2384,7 +2399,8 @@
       skip: function (e) {
         var t = e.target;
         if (!t || !t.closest) return false;
-        return !!t.closest('.playlist-inner, .settings-body');
+        // 整个播放列表面板都交给它自己的接管器（含标签栏、提示条、分隔线）
+        return !!t.closest('.music-playlist, .settings-body');
       }
     });
   }
@@ -2392,15 +2408,19 @@
   // ==================== 启动 ====================
 
   function init() {
-    initLoadBar();
-    initNightMode();
-    initParticles();
-    initParallax();
-    initCloudParallax();
-    initMusic();
-    initSocialButtons();
-    initVisitor();
-    initSmoothScroll();
+    // 逐个隔离调用：任一模块初始化抛错只影响自己，
+    // 不会连带把后面的模块（邮箱复制、访客文案、整页滚动）一起禁掉
+    var steps = [
+      initLoadBar, initNightMode, initParticles, initParallax, initCloudParallax,
+      initMusic, initSocialButtons, initVisitor, initSmoothScroll
+    ];
+    for (var i = 0; i < steps.length; i++) {
+      try {
+        steps[i]();
+      } catch (err) {
+        console.error('[init] ' + (steps[i].name || '#' + i) + ' 初始化失败：', err);
+      }
+    }
   }
 
   // DOMContentLoaded 或直接执行

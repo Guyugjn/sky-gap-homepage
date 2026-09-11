@@ -202,10 +202,15 @@
     document.getElementById('fortune-error').style.display = 'none';
   }
 
-  /** 显示错误 */
-  function showFortuneError() {
+  /** 显示错误（msg 可选：区分网络异常与数据异常；缺省沿用页面里写的原文案） */
+  function showFortuneError(msg) {
+    var errEl = document.getElementById('fortune-error');
     document.getElementById('fortune-loading').style.display = 'none';
-    document.getElementById('fortune-error').style.display = 'block';
+    // 首个文本节点就是提示文案，改它即可保留其后的「重试」按钮
+    if (msg && errEl && errEl.firstChild && errEl.firstChild.nodeType === 3) {
+      errEl.firstChild.nodeValue = msg;
+    }
+    errEl.style.display = 'block';
     bindFortuneRetry();
   }
 
@@ -216,6 +221,10 @@
     btn._retryBound = true;
     btn.addEventListener('click', function (e) {
       e.preventDefault();
+      // 连点节流：避免连续 abort / 新建请求把接口打得更糟
+      var now = Date.now();
+      if (now - (btn._lastRetry || 0) < 500) return;
+      btn._lastRetry = now;
       loadFortune();
     });
   }
@@ -225,7 +234,40 @@
   var _lastFortuneTimer = null;
   var _fortuneReqId = 0; // 请求序号 — 竞态守卫：已过期的旧请求结果一律丢弃
 
+  // 会话内缓存：同一星座 + 同一时段的结果 10 分钟内直接复用。
+  // 运势接口是整张卡片唯一的外部依赖，切 Tab 与刷新都重复请求既慢又容易被限流
+  var FORTUNE_CACHE_TTL = 10 * 60 * 1000;
+
+  function _fortuneCacheKey() {
+    return 'gy_fortune:' + currentFortuneSign.name + ':' + currentFortuneTime;
+  }
+
+  function readFortuneCache() {
+    try {
+      var raw = sessionStorage.getItem(_fortuneCacheKey());
+      if (!raw) return null;
+      var rec = JSON.parse(raw);
+      if (!rec || !rec.t || Date.now() - rec.t > FORTUNE_CACHE_TTL) return null;
+      return rec.d || null;
+    } catch (_e) {
+      return null;   // 隐私模式 / 存储被禁：当作没有缓存
+    }
+  }
+
+  function writeFortuneCache(data) {
+    try {
+      sessionStorage.setItem(_fortuneCacheKey(), JSON.stringify({ t: Date.now(), d: data }));
+    } catch (_e) {}
+  }
+
   function loadFortune() {
+    var cached = readFortuneCache();
+    if (cached) {
+      document.getElementById('fortune-loading').style.display = 'none';
+      document.getElementById('fortune-error').style.display = 'none';
+      renderFortune(cached);
+      return;
+    }
     showFortuneLoading();
 
     var reqId = ++_fortuneReqId;
@@ -261,22 +303,30 @@
         document.getElementById('fortune-loading').style.display = 'none';
         document.getElementById('fortune-error').style.display = 'none';
         if (json.code === 200 && json.data) {
-          renderFortune(json.data);
+          writeFortuneCache(json.data);
+          // 渲染单独兜住：接口结构变了要让用户看到"数据异常"，
+          // 而不是被下面的 catch 归成网络失败、让人一直重试网络
+          try {
+            renderFortune(json.data);
+          } catch (renderErr) {
+            console.warn('运势渲染失败：', renderErr);
+            showFortuneError('运势数据格式异常 ');
+          }
         } else {
-          showFortuneError();
+          showFortuneError('运势数据暂不可用 ');
         }
       })
       .catch(function (err) {
         // 超时（本请求超时 abort）→ 显示错误；被新请求取消 → 静默丢弃
         if (err.name === 'AbortError' && reqId === _fortuneReqId) {
           if (_lastFortuneTimer) { clearTimeout(_lastFortuneTimer); _lastFortuneTimer = null; }
-          showFortuneError();
+          showFortuneError('请求超时，运势加载失败 ');
           return;
         }
         if (err.name === 'AbortError') return; // 被新请求取消
         if (reqId !== _fortuneReqId) return;
         if (_lastFortuneTimer) { clearTimeout(_lastFortuneTimer); _lastFortuneTimer = null; }
-        showFortuneError();
+        showFortuneError('网络异常，运势加载失败 ');
       });
   }
 
@@ -1115,9 +1165,12 @@
       '255, 250, 220'   // 米白
     ];
 
+    var _celebrateTimer = null;   // 次级爆发的定时器：特效关闭时一并取消
+
     /** 在指定星座节点位置生成绚丽庆祝粒子（触屏设备从星核/星轨中心爆发） */
     function spawnCelebrate(constIndex) {
       if (constIndex < 0) return;
+      if (!_fxStarfield) return;   // 星空特效关闭：与光束/流星保持一致，不放庆祝粒子
       // 白天模式临时显示 Canvas 以渲染庆祝粒子
       if (canvas.style.display !== 'block') canvas.style.display = 'block';
       var srcX, srcY;
@@ -1189,8 +1242,11 @@
         });
       }
 
-      // 次级小爆发 — 延迟 350ms 在原位补一波细碎火星
-      setTimeout(function () {
+      // 次级小爆发 — 延迟 350ms 在原位补一波细碎火星（timer 留存，特效关闭时一并取消）
+      if (_celebrateTimer) clearTimeout(_celebrateTimer);
+      _celebrateTimer = setTimeout(function () {
+        _celebrateTimer = null;
+        if (!_fxStarfield) return;   // 期间特效被关闭：不再往已清空的数组里推粒子
         for (var p2 = 0; p2 < 35; p2++) {
           var a2 = Math.random() * Math.PI * 2;
           var sp2 = 0.6 + Math.random() * 2.2;
@@ -1796,7 +1852,7 @@
           if (muts[i].attributeName === 'class') { readTheme(); break; }
         }
       });
-      themeObserver.observe(document.documentElement, { attributes: true });
+      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     }
     if (typeof window._registerTick === 'function') {
       window._registerTick(tick);
@@ -1806,8 +1862,13 @@
     if (typeof window.__gyFx === 'object' && window.__gyFx && window.__gyFx.register) {
       window.__gyFx.register('starfield', function (on) {
         _fxStarfield = on;
-        if (!on) { starBeams = []; celebrateParticles = []; }
-        else { scheduleMeteor(); }
+        if (!on) {
+          if (_celebrateTimer) { clearTimeout(_celebrateTimer); _celebrateTimer = null; }
+          starBeams = [];
+          celebrateParticles = [];
+        } else {
+          scheduleMeteor();
+        }
       });
     }
     // 防抖：resize 会触发 generate()（星点/粒子重建），窗口拖拽连续触发时合并为一次

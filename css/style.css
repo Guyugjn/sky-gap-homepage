@@ -101,8 +101,8 @@ body {
   font-family: var(--font-cn);
   color: var(--text-primary);
   background: var(--sky-mid); /* 整站纯色背景（白天浅蓝/夜间深蓝，变量驱动） */
-  min-height: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   cursor: default;
   line-height: 1.7;
@@ -110,6 +110,13 @@ body {
   overscroll-behavior: none;
   /* 刘海屏 / 底部指示条安全区适配 */
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* hidden 属性优先于任何布局规则。
+   作者样式表里的 display 会盖掉浏览器默认的 [hidden] { display: none }，
+   用 hidden 控制的元素（设置遮罩、清除选择按钮）会因此常显、白占合成层 */
+[hidden] {
+  display: none !important;
 }
 
 /* ============================================
@@ -266,8 +273,10 @@ body {
 .cursor-fish {
   position: fixed;
   z-index: 0;
-  pointer-events: auto;
-  cursor: pointer;
+  /* 鱼贴在光标附近（最近 62px），自身对角半径约 73px —— 参与命中时会偶发盖住
+     光标下方的按钮，表现为"点一次没反应"。指针事件穿透即可；
+     点击涟漪与受惊逃跑走的是 document 上的全局监听，不受影响 */
+  pointer-events: none;
   width: 104px;
   height: 84px;
   transform: translate(-42.1%, -51.6%);
@@ -413,8 +422,8 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 2rem;
   text-align: center;
   /* 防止 hero 内容拦截下方区域的事件（飞鱼点击等） */
@@ -446,7 +455,7 @@ body {
   transform: scale(1.08);
 }
 
-/* 光晕环 */
+/* 光晕环 — 基础光晕常驻，呼吸感由伪元素的 opacity 承担（只走合成，不必每帧重绘阴影） */
 .avatar-ring {
   position: absolute;
   inset: -12px;
@@ -459,19 +468,27 @@ body {
   animation: ring-breathe 4s ease-in-out infinite;
 }
 
+/* 呼吸时叠加的那层光晕 */
+.avatar-ring::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 45px rgba(168, 212, 232, 0.7),
+    0 0 110px rgba(168, 212, 232, 0.45);
+  opacity: 0;
+  animation: ring-glow 4s ease-in-out infinite;
+}
+
 @keyframes ring-breathe {
-  0%, 100% {
-    box-shadow:
-      0 0 30px var(--glow-color),
-      0 0 80px rgba(168, 212, 232, 0.3);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow:
-      0 0 45px rgba(168, 212, 232, 0.7),
-      0 0 110px rgba(168, 212, 232, 0.45);
-    transform: scale(1.04);
-  }
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+
+@keyframes ring-glow {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
 }
 
 .avatar {
@@ -700,13 +717,15 @@ body {
 .music-playlist {
   max-height: 0;
   overflow: hidden;
-  margin: 0 -0.65rem;
+  /* 与 .music-player 的左右内边距（0.8rem）对齐，列表满宽贴到卡片边缘 */
+  margin: 0 -0.8rem;
   border-radius: 0;
   transition: max-height 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
 .music-playlist.open {
-  /* 42px 为列表滚动区之上的标签栏 + 提示条预留高度 */
-  max-height: calc(175px + 42px);
+  /* 64px 为滚动区之上的标签栏 + 提示条预留：标签栏约 38px、提示条约 22px。
+     留够这段高度，降级环境下提示条出现时列表底部与下方分隔线才不会被裁掉 */
+  max-height: calc(175px + 64px);
 }
 
 /* 列表分隔线 */
@@ -1244,7 +1263,8 @@ body {
   position: fixed;
   bottom: 1.8rem;
   left: 50%;
-  z-index: 20;
+  /* 必须高于设置遮罩（1000）：在设置面板里操作后的提示要看得见 */
+  z-index: 1001;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -1354,7 +1374,7 @@ body {
     margin: 0 -0.85rem -0.6rem;
   }
   .music-playlist.open {
-    max-height: min(calc(175px + 42px), calc(40vh + 42px));
+    max-height: min(calc(175px + 64px), calc(40vh + 64px));
   }
   .playlist-inner {
     max-height: min(175px, 40vh);
@@ -1426,7 +1446,7 @@ body {
     margin: 0 -0.75rem -0.5rem;
   }
   .music-playlist.open {
-    max-height: calc(135px + 42px);
+    max-height: calc(135px + 64px);
   }
   .playlist-inner {
     max-height: 135px;
@@ -1686,6 +1706,7 @@ html.night-mode .starchart-canvas {
   font-family: var(--font-cn);
   cursor: pointer;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition:
     opacity 0.4s ease,
     transform 0.3s var(--ease-premium),
@@ -1923,11 +1944,14 @@ html.night-mode .trail-core-inner {
   font-weight: 600;
 }
 
-/* 移动端：细线略加粗、标签可读 */
+/* 移动端：细线略加粗、标签放大。
+   这两个 font-size 作用在 SVG 用户坐标里，会随 viewBox 等比缩小 ——
+   viewBox 宽 640 在 375px 屏上缩放约 0.54，原来的 12 实际只有约 6.5px（320px 屏约 5.4px）。
+   日期数字间距约 25 单位、月份标签约 46 单位，18px 的两位数字约占 20 单位，放得下且不重叠 */
 @media (max-width: 480px) {
   .trail-day-line { stroke-width: 3; }
-  .trail-day-label { font-size: 12px; }
-  .month-label { font-size: 12px; }
+  .trail-day-label { font-size: 18px; }
+  .month-label { font-size: 18px; }
 }
 
 /* 两条独立的弧形滑动轨道（透明命中带）：
@@ -1936,7 +1960,9 @@ html.night-mode .trail-core-inner {
 .trail-arc-hit {
   fill: none;
   stroke: rgba(0, 0, 0, 0);   /* 完全透明，不参与视觉 */
-  stroke-width: 44;
+  /* 72：缩放后小屏仍有约 38px 宽的触摸命中带（375px 屏）。
+     两条弧半径差 85 单位，72 的带各占 36，尚余 13 单位间隙，不会互相覆盖导致维度误判 */
+  stroke-width: 72;
   pointer-events: stroke;
   touch-action: none;
   cursor: pointer;
@@ -2285,6 +2311,7 @@ html.night-mode .zodiac-grid {
   }
 
   .zodiac-container {
+    min-height: 100vh;
     min-height: 100dvh;
     padding: 3rem 1rem 5rem;
     justify-content: flex-start;
@@ -2399,7 +2426,10 @@ html.night-mode .zodiac-grid {
   right: 0 !important;
   bottom: 0 !important;
   left: auto !important;
-  z-index: 8 !important;
+  /* 低于 .music-player（z-index: 2）。看板娘占右下 300×300，层级更高时会把落在
+     该区域上的点击全部吃掉，表现为播放器/播放列表点不动。
+     看板娘自身的悬停与点击交互不受影响，只是与播放器重叠时让播放器在上层 */
+  z-index: 1 !important;
 }
 
 /* 对话气泡 — 暖色调适配 */
@@ -2462,7 +2492,9 @@ html.night-mode .zodiac-grid {
   .fortune-tab,
   .toast,
   .social-tip,
-  .mode-tip {
+  .mode-tip,
+  .zodiac-card,
+  .settings-panel {
     background: rgba(255, 255, 255, 0.85) !important;
   }
   html.night-mode .music-player,
@@ -2471,7 +2503,9 @@ html.night-mode .zodiac-grid {
   html.night-mode .fortune-tab,
   html.night-mode .toast,
   html.night-mode .social-tip,
-  html.night-mode .mode-tip {
+  html.night-mode .mode-tip,
+  html.night-mode .zodiac-card,
+  html.night-mode .settings-panel {
     background: rgba(25, 45, 70, 0.92) !important;
   }
 }

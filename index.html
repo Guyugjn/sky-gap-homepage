@@ -12,8 +12,10 @@
   <meta property="og:title" content="孤鱼GY · 天空之隙">
   <meta property="og:description" content="一条在天空之隙中游弋的飞鱼 — 探索星座运势、聆听音乐、与看板娘互动。">
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
   <meta property="og:url" content="https://www.080322.xyz">
   <meta property="og:image" content="https://www.080322.xyz/assets/og-image.jpg">
+  <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="孤鱼GY · 天空之隙 — 一只飞鱼游弋在星空与云海之间">
@@ -53,27 +55,30 @@
   <meta name="theme-color" content="#B0D2E7" id="theme-color-meta">
   <link rel="icon" href="assets/favicon.svg">
   <!-- iOS 主屏图标 -->
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <!-- Ma Shan Zheng 马山正体 — 本地托管（unicode-range 分片：浏览器只下载用到的汉字分片，不依赖 Google Fonts） -->
-  <link rel="stylesheet" href="assets/fonts/ma-shan-zheng.css">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+  <!-- Ma Shan Zheng 马山正体 — 本地托管（unicode-range 分片：浏览器只下载用到的汉字分片，不依赖 Google Fonts）
+       preload 必须排在 stylesheet 之前才有"提前发现"的意义，且两处 URL 必须完全一致（含 ?v=）才能复用同一次下载 -->
+  <link rel="preload" href="assets/fonts/ma-shan-zheng.css?v=1.3.0" as="style">
+  <link rel="stylesheet" href="assets/fonts/ma-shan-zheng.css?v=1.3.0">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="dns-prefetch" href="https://v2.xxapi.cn">
-  <link rel="preload" href="assets/fonts/ma-shan-zheng.css" as="style">
   <!-- 头像提前下载（首屏关键图） -->
   <link rel="preload" href="assets/avatar.jpg" as="image">
-  <link rel="stylesheet" href="css/style.css">
-  <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行 -->
-  <script defer src="assets/music/playlist.js"></script>
-  <script defer src="assets/twemoji.min.js"></script>
+  <link rel="stylesheet" href="css/style.css?v=1.3.0">
+  <!-- 外部脚本全部使用 defer：浏览器提前发现并并行下载，不阻塞 HTML 解析，按顺序执行。
+       ?v= 是发布版本号：HTML 不缓存而 css/js 缓存 1 天，靠它避免"新页面配旧脚本"，
+       每次发布改动这些文件时同步递增即可 -->
+  <script defer src="assets/music/playlist.js?v=1.3.0"></script>
+  <script defer src="assets/twemoji.min.js?v=1.3.0"></script>
   <!-- 滚轮动量滚动：无依赖，供 settings.js（设置面板）与 main.js（整页滚动）调用 -->
-  <script defer src="js/smoothScroll.js"></script>
+  <script defer src="js/smoothScroll.js?v=1.3.0"></script>
   <!-- settings.js 先于 main.js 执行，优先定义 __gySettings 存储（供各模块 init 读取默认值） -->
-  <script defer src="js/settings.js"></script>
+  <script defer src="js/settings.js?v=1.3.0"></script>
   <!-- 本地音乐存储层：无依赖，供 main.js 的播放器调用 -->
-  <script defer src="js/localMusic.js"></script>
-  <script defer src="js/main.js"></script>
-  <script defer src="js/zodiac.js"></script>
-  <script defer src="live2d/autoload.js"></script>
+  <script defer src="js/localMusic.js?v=1.3.0"></script>
+  <script defer src="js/main.js?v=1.3.0"></script>
+  <script defer src="js/zodiac.js?v=1.3.0"></script>
+  <script defer src="live2d/autoload.js?v=1.3.0"></script>
 </head>
 <body>
   <!-- 页面加载进度条 -->
@@ -493,6 +498,11 @@
         }
         twemoji.parse(document.body, {
           className: 'emoji',
+          /* HTTP 下 emoji 走本地 PNG，首屏几十个小图标会跟关键资源抢带宽 ——
+             懒加载 + 异步解码，且不改变已有视觉效果（视口内的图标浏览器仍会立即取） */
+          attributes: function () {
+            return { loading: 'lazy', decoding: 'async' };
+          },
           onerror: function () {
             /* CDN 故障 → 全局切换 base，后续所有 parse() 都走本地 */
             if (twemoji.base.indexOf('jsdelivr') !== -1) {
