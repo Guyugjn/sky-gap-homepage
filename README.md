@@ -55,6 +55,8 @@ iOS 控制中心风格的四行卡片：列表循环 / 单曲循环 / 随机播�
 ├── live2d/                 # 看板娘（autoload.js 入口 · waifu-tips.js 气泡 · chunk/ · models/）
 ├── assets/                 # 头像、图标、og-image、favicon、Twemoji 图标库、字体分片、音乐
 ├── generate_playlist.py    # 扫描 assets/music/ 生成 playlist.js
+├── deploy/                 # 服务器部署配置与脚本（IIS / Nginx）
+├── 服务器运维/             # 真实服务器信息与本地运维脚本（不进 git，见下方说明）
 ├── release/                # 构建输出目录（部署打包用，git 不跟踪）
 ├── web.config              # IIS 缓存策略 + 安全头 + 敏感路径屏蔽
 ├── robots.txt              # 爬虫规则与 sitemap 声明（git 不跟踪，随站上传）
@@ -64,6 +66,20 @@ iOS 控制中心风格的四行卡片：列表循环 / 单曲循环 / 随机播�
 ├── README.md
 └── LICENSE
 ```
+
+### 🔒 服务器地址与端口
+
+本仓库是**公开**的，所以仓库内的文档与示例命令一律使用占位符 `<服务器IP>` / `<SSH端口>` / `<网站端口>`，**不含真实值**。
+
+真实值只存在本地 `服务器运维/` 目录（`服务器信息.md` 记录 IP、端口、Cloudflare 配置与网络限制；`deploy.sh` 是填好真实值的一键部署脚本）。该目录在三处被拦住：
+
+| 出口 | 拦截方式 |
+|---|---|
+| 不进 GitHub | `.gitignore` 排除 `服务器运维/` |
+| 不进部署包 | `deploy/pack-site.sh` 的排除规则与自检 |
+| 不进网站 | `web.config` 与 `deploy/nginx/sky-gap.conf` 的屏蔽清单 |
+
+> 部署自己的实例时，把文档里的占位符替换成你的真实值即可 —— 除此之外所有配置都能直接复用。
 
 ---
 
@@ -79,11 +95,50 @@ npx serve .
 python generate_playlist.py
 ```
 
-生产环境推荐 IIS（`web.config` 已配置缓存策略、安全头、压缩，并屏蔽 `.git`、`release/`、`memory.md`、`README.md`、`generate_playlist.py` —— 即使把项目目录整体拷到站点根，源码历史与构建产物也不会被下载），Nginx、Apache 同样可用。示例网站：**[www.080322.xyz](https://www.080322.xyz)**
+### 服务器方案
+
+安全头、缓存策略与敏感路径屏蔽都已配好，**按服务器环境二选一**，两者功能等价、需保持同步：
+
+| 服务器 | 配置文件 | 说明 |
+|--------|----------|------|
+| **Nginx** | [`deploy/nginx/sky-gap.conf`](deploy/nginx/sky-gap.conf) | 生产环境使用，配套一键安装脚本 |
+| **IIS** | [`web.config`](web.config) | 项目根目录，Windows 环境使用 |
+
+Nginx、Apache 等其余服务器同样可用。示例网站：**[www.080322.xyz](https://www.080322.xyz)**
+
+### 一键部署（Nginx）
+
+> 🔑 **关于占位符**：本仓库公开，示例命令里的服务器地址与端口一律写成占位符，**复制前请先替换为真实值**。
+
+| 占位符 | 含义 |
+|---|---|
+| `<服务器IP>` | 服务器公网 IP |
+| `<SSH端口>` | SSH 的外部端口 |
+| `<网站端口>` | 网站的外部端口 |
+
+真实值不写入仓库，仅存本地 `服务器运维/服务器信息.md`（同目录还有填好真实值的 `deploy.sh` 一键部署脚本）。详见 **[deploy/README.md](deploy/README.md#-占位符说明)**。
+
+```bash
+# 1. 本地打包（产出 release/sky-gap-site.tar，约 194MB）
+bash deploy/pack-site.sh
+
+# 2. 上传站点包与部署脚本（把占位符换成真实值）
+scp -P <SSH端口> release/sky-gap-site.tar root@<服务器IP>:/tmp/
+scp -P <SSH端口> -r deploy/nginx root@<服务器IP>:/tmp/deploy-nginx/
+
+# 3. 解压并安装（脚本自动完成装 Nginx、配置、权限、自检）
+ssh -p <SSH端口> root@<服务器IP>
+mkdir -p /var/www/sky-gap && tar -xf /tmp/sky-gap-site.tar -C /var/www/sky-gap
+cd /tmp/deploy-nginx && bash install.sh
+```
+
+完整流程、网络限制说明与常见问题见 **[deploy/README.md](deploy/README.md)**。
 
 > 📌 **发布时记得递增版本号**：`index.html` 中 CSS / JS / 字体 CSS / `playlist.js` 的引用都带 `?v=1.3.0`。HTML 不缓存而 css/js 缓存 1 天，改动了这些文件却不递增版本号，老访客 24 小时内会拿到「新页面配旧脚本」。
 
-> ⚠️ **GitHub Pages 不是完整部署**：`.gitignore` 排除了 `assets/music/` 下的音频文件（约 178MB，仅保留 `playlist.js`）、`assets/twemoji-72x72/`、`robots.txt`、`sitemap.xml`，音乐播放、Twemoji 本地图标与 SEO 收录需要把这些资源随站托管。版本包存放在 `release/`，已发布 `sky-gap-v1.0.0/1.1.0/1.2.0/1.3.0.zip`（各约 190MB，含音乐 / Twemoji / SEO 文件的完整部署包）。
+> ⚠️ **打包不会自动带上这些资源**：`.gitignore` 排除了 `assets/music/` 下的音频文件（约 178MB，仅保留 `playlist.js`）、`assets/twemoji-72x72/`、`robots.txt`、`sitemap.xml`、`tools/`。`deploy/pack-site.sh` 打包时会**保留**它们，但直接用 git 仓库部署会缺资源，音乐播放、Twemoji 本地图标与 SEO 收录都会失效。
+>
+> 版本包存放在 `release/`，已发布 `sky-gap-v1.0.0/1.1.0/1.2.0/1.3.0.zip`（各约 187–188MB，含音乐 / Twemoji / SEO 文件的完整部署包）。
 
 ---
 

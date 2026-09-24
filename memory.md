@@ -23,6 +23,7 @@ release/                — 构建输出目录（部署打包用，git 不跟踪
 live2d/                 — 看板娘（autoload.js 入口 + waifu-tips.js + chunk/ + SDK + 双模型）
 assets/                 — 头像、apple-touch-icon、og-image、favicon、Twemoji 库、字体、音乐
 web.config              — IIS 缓存策略 + 安全头（CSP/HSTS 已启用）+ 压缩 + requestFiltering 屏蔽敏感路径；live2d/web.config 注册 .moc/.mtn MIME
+deploy/                 — 服务器部署配置与脚本（Nginx 配置与安装脚本、打包脚本）；详见 deploy/README.md
 
 ## 字体（Ma Shan Zheng 马山正体）
 
@@ -223,10 +224,93 @@ SVG 飞鱼三种模式（漫游/追逐光标/受惊逃跑），`transform: trans
 - **`init()` 是隔离调用的**：`main.js` 末尾把各 init 收进 `steps` 数组逐个 `try/catch`，单个模块初始化抛错不再连带禁用后面的模块。**新增 init 函数必须加进 `steps` 数组**，否则不会被调用。
 - **播放列表的滚轮接管绑在 `.music-playlist` 上**（不是 `.playlist-inner`），整页接管的 `skip` 也按 `.music-playlist, .settings-body` 放行 —— 标签栏、提示条、分隔线上的滚轮同样要滚列表，否则会冒泡给整页、把页面滚走。
 - **随机模式的历史栈只在索引有效时入栈**：切到另一个列表后 `currentIndex` 为 `-1`，压栈会让「上一首」弹出无效索引（没声音还弹空提示）。`playPrev` 会跳过失效索引；列表循环模式下 `-1` 回退到列表末尾，而不是 `(-1-1+N)%N` 算出的倒数第二首。
-- **`web.config` 屏蔽了敏感路径**：`requestFiltering/hiddenSegments` 拦 `.git`、`release`、`memory.md`、`README.md`、`generate_playlist.py`（返回 403.8），即使把项目目录整体拷到站点根也不会泄露源码历史与构建产物。新增同类文件时按 `remove` + `add` 的幂等写法加进 `hiddenSegments`。
+- **`web.config` 屏蔽了敏感路径**：`requestFiltering/hiddenSegments` 拦 `.git`、`release`、`deploy`、`memory.md`、`memory-tools.md`、`README.md`、`generate_playlist.py`（返回 403.8），即使把项目目录整体拷到站点根也不会泄露源码历史与构建产物。新增同类文件时按 `remove` + `add` 的幂等写法加进 `hiddenSegments`，并同步更新 `deploy/nginx/sky-gap.conf` 的屏蔽段。
 - **`avatar-ring` 的呼吸光晕分两层**：基础光晕常驻在 `.avatar-ring` 上，呼吸增强层是 `.avatar-ring::after` 的 `opacity` 动画（`ring-glow`），`ring-breathe` 只负责 `transform: scale`。**不要再把 `box-shadow` 写回 keyframes** —— 那会让整个头像环每帧重绘阴影。
 - **`assets/twemoji-72x72/` 是 Twemoji 主源**：生产经 307 落到 HTTP（非安全上下文），`index.html` 按 `isSecure` 分流后 twemoji base 就是本地目录 —— 这是主源、不是 CDN 备用，**删除会碎图**。
 - **`.gitignore` 只写规则、不写注释**：该文件会同步到公开仓库，注释会暴露被忽略内容的性质
   - 不进 git 但**部署时必须上传**：`assets/music/*`（保留 `playlist.js`）、`assets/twemoji-72x72/`、`robots.txt`、`sitemap.xml`、`tools/`、`memory-tools.md`。
   - `release/` 是部署打包目录，git 不跟踪，**勿删**。
   - `robots.txt` 引用的 sitemap 为生产域名。
+
+## 部署与运维
+
+完整流程与常见问题见 `deploy/README.md`，此处只记容易踩坑与容易忘的结论。
+
+### 生产环境
+
+Ubuntu 24.04.1 LTS + Nginx，站点根 `/var/www/sky-gap`，配置 `/etc/nginx/sites-available/sky-gap`。服务器地址、SSH 端口与网站外部端口**不写进仓库**，实际值见本地 `服务器运维/服务器信息.md`。
+
+端口映射在虚拟化层，**重装系统不会丢失**，但新增服务必须在云面板**手动加映射**才能从外网访问。本机是共享出口 IP 的 NAT 实例，同一端口号可能与他人冲突，映射不通就换个外部端口。
+
+### 敏感信息的三道出口（务必同步）
+
+仓库是 **public**，真实服务器地址与端口只存在本地 `服务器运维/`，该目录被三层拦在外面，**新增同类信息时三处都要加**：
+
+1. **不进 GitHub** —— `.gitignore` 排除 `服务器运维/`
+2. **不进部署包** —— `deploy/pack-site.sh` 的 `--exclude` 与排除项自检都含它
+3. **不进网站** —— `web.config` 的 `hiddenSegments` 与 `deploy/nginx/sky-gap.conf` 的 `location` 都屏蔽它（中文路径已实测匹配有效）
+
+### 占位符约定
+
+仓库内一切文档、注释、示例命令里的服务器地址与端口**只能写占位符**，四者全套用：
+
+| 占位符 | 含义 |
+|---|---|
+| `<服务器IP>` | 服务器公网 IP |
+| `<SSH端口>` | SSH 的外部端口 |
+| `<网站端口>` | 网站的外部端口 |
+| `<NTP端口>` | NTP 的外部端口 |
+
+- 新增文档时**先查真实值有没有被顺手写进去**，再提交
+- 三道出口只拦目录连带上传，**手动粘贴命令时仍需自己注意**
+- `deploy/README.md` 开头的「占位符说明」是面向使用者的权威说明，改动约定时两份一起改
+- 排查历史时可用 `git log -S"<实际IP>"` 确认敏感值从未进入提交
+
+### 网络可达性限制（关键）
+
+这台服务器**仅中国大陆境内可达**，属机房/线路层策略，面板与系统内都改不了。
+
+- 境外 → 服务器：连 ICMP ping 都不通（全球多节点实测）
+- 服务器 → 境外：google / github / cloudflare 全部超时，仅百度、阿里云等境内可达
+- 服务器内部 `iptables` 规则为空、`ufw` 未启用 —— **不是防火墙或端口映射的问题**
+
+由此**排除**：Cloudflare 代理回源（522）、Cloudflare Tunnel（出站连不上 `argotunnel.com:7844`）。可用：国内 CDN、直连源站。
+
+> 当前访问链路是 Cloudflare 的 Redirect Rule 307 跳转到源站的公网端口 —— 不是最优架构，是被上述限制逼出来的。代价是地址栏显示 http、源站 IP 暴露、Cloudflare 缓存与 WAF 完全不生效。Cloudflare 上另有一条**已停用**的 Origin Rules「回源端口改写」保留备用。
+
+### 国内源（重装后必做）
+
+- **apt**：`archive.ubuntu.com` / `security.ubuntu.com` 不可达，切 `mirrors.aliyun.com`。`deploy/nginx/install.sh` 已内置幂等切换逻辑（原文件备份 `.bak`），也可手动 `sed` 替换 `/etc/apt/sources.list.d/ubuntu.sources`。
+
+### Nginx 配置要点
+
+- **缓存必须用 `expires`，不能用 `add_header`**：`location` 里一旦出现 `add_header`，会覆盖从 `server` 级继承的**全部** `add_header`（含 CSP），表现为"安全头莫名其妙全没了"。`expires` 无此副作用。
+- **`web.config` 与 `deploy/nginx/sky-gap.conf` 功能等价、必须同步**：改缓存、安全头或屏蔽清单时两份都要动。
+- **`location ^~` 前缀匹配是最长优先**，与书写顺序无关（`/assets/music/` 自动压过 `/assets/`）。
+- **屏蔽清单两份必须一致**：`.git`、`release/`、`deploy/`、`服务器运维/`、`memory.md`、`memory-tools.md`、`README.md`、`generate_playlist.py`（Nginx 另屏蔽 `web.config`）。新增同类目录时两处同步加。
+- **屏蔽 `服务器运维/` 的理由是纵深防御**：该目录打包时已排除、也不进 git，服务器上这一层是防日后误传。注意 Nginx 的中文 `location` 匹配已实测有效，但**必须写成 `location ~ ^/服务器运维(/|$)`**，不要试图改成前缀匹配。
+
+### 部署命令
+
+> 下列占位符需替换为真实值（真实值见 `服务器运维/服务器信息.md`）。本地 `服务器运维/deploy.sh` 已填好真实值，可直接跑完这一整套。
+
+```bash
+bash deploy/pack-site.sh                                    # 本地打包 → release/sky-gap-site.tar
+scp -P <SSH端口> release/sky-gap-site.tar root@<服务器IP>:/tmp/
+scp -P <SSH端口> -r deploy/nginx root@<服务器IP>:/tmp/deploy-nginx/
+```
+
+服务器上：解压到 `/var/www/sky-gap`，然后 `cd /tmp/deploy-nginx && bash install.sh`。脚本会自动装 Nginx、修正权限（tar 解压常见 777）、装配置、移除默认站点、`nginx -t`、自启、本机 curl 自检。
+
+### 验证清单
+
+改完配置或重新部署后逐条过一遍（占位符同样需替换）：
+
+```bash
+curl -I -H 'Host: www.080322.xyz' http://127.0.0.1/     # 期望 200
+curl -I http://<服务器IP>:<网站端口>/                     # 期望 200
+curl -I https://www.080322.xyz                           # 期望 307 → 200
+curl -s -o /dev/null -w '%{http_code}\n' http://<服务器IP>:<网站端口>/memory.md        # 期望 403
+curl -s -o /dev/null -w '%{http_code}\n' http://<服务器IP>:<网站端口>/deploy/          # 期望 403
+curl -s -o /dev/null -w '%{http_code}\n' http://<服务器IP>:<网站端口>/服务器运维/      # 期望 403
+```
