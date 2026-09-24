@@ -19,7 +19,7 @@ js/settings.js          — 设置面板（gy_settings 存储、齿轮按钮、�
 js/smoothScroll.js      — 滚轮动量滚动接管（整页 + 设置面板复用播放列表手感；暴露 window.__gySmoothScroll）
 js/localMusic.js        — 本地音乐存储层（双轨：FSA 句柄持久化 / 内存会话轨；暴露 window.__gyLocalMusic）
 generate_playlist.py    — 扫描 assets/music/ 生成 playlist.js（含 U+00A0 文件名警告）
-release/                — 构建输出目录（部署打包用，git 不跟踪，勿删）；已发布 sky-gap-v1.0.0/1.1.0/1.2.0/1.3.0.zip
+release/                — 构建输出目录（部署打包用，git 不跟踪，勿删）；已发布 sky-gap-v1.0.0/1.1.0/1.2.0/1.3.0/1.4.0.zip
 live2d/                 — 看板娘（autoload.js 入口 + waifu-tips.js + chunk/ + SDK + 双模型）
 assets/                 — 头像、apple-touch-icon、og-image、favicon、Twemoji 库、字体、音乐
 web.config              — IIS 缓存策略 + 安全头（CSP/HSTS 已启用）+ 压缩 + requestFiltering 屏蔽敏感路径；live2d/web.config 注册 .moc/.mtn MIME
@@ -217,7 +217,7 @@ SVG 飞鱼三种模式（漫游/追逐光标/受惊逃跑），`transform: trans
   - `live2d/autoload.js` → `initLive2D()` 内注册 **window 捕获阶段 mouseover 节流**（`_waifuMouseThrottle`，500ms，`e.stopImmediatePropagation()` 吞掉命中 selector 的快速连续 hover）：**这是 `file://` 下的兜底**——该协议下 waifu-tips.js 因 ES module CORS 回退 CDN，本地注入的防抖不生效，必须靠 autoload.js 的捕获拦截（两种协议都加载）。改节流窗口时两处须同步。
 - **`[hidden]` 有全局兜底**：`css/style.css` 开头的 `[hidden] { display: none !important; }` 保证 `hidden` 属性始终生效（作者样式表里的 `display` 会盖掉浏览器默认的 `[hidden]{display:none}`）。控制显隐直接用 `hidden` 属性即可，不必额外加类或内联样式。
 - **列表项必须带 `data-index`**：`_localListHtml` / `_builtinListHtml` 渲染时写入，取值与 `tracks` 队列下标同源，`scrollToListIndex()` 靠它做切歌与开列表后的自动居中。漏写会让定位**静默失效** —— `querySelector` 返回 null 后直接 return，不报任何错。
-- **静态资源版本号 `?v=`**：`index.html` 中 css / js / 字体 CSS / `playlist.js` 的引用都带 `?v=1.3.0`。**HTML 不缓存而 css/js 缓存 1 天**，发布时改动了这些文件就必须同步递增，否则老访客 24 小时内拿到的是"新页面配旧脚本"。
+- **静态资源版本号 `?v=`**：`index.html` 中 css / js / 字体 CSS / `playlist.js` 的引用都带 `?v=1.4.0`。**HTML 不缓存而 css/js 缓存 1 天**，发布时改动了这些文件就必须同步递增，否则老访客 24 小时内拿到的是"新页面配旧脚本"。
 - **星轨的尺寸参数受 viewBox 缩放约束**：`.trail-day-label` / `.month-label` 的 `font-size` 与 `.trail-arc-hit` 的 `stroke-width` 都写在 SVG 用户坐标里，会随 viewBox（640 宽）等比缩小（375px 屏缩放约 0.54），小屏断点因此把字号设为 18 单位（实际约 9.7px；日期数字间距约 25 单位、月份标签约 46 单位，放得下）。**命中带 72 是上限**：两弧半径差只有 85 单位（`R_DAY 235 − R_MONTH 150`），带宽超过 84 就会互相覆盖，表现为"按下哪条轨都选中同一条"，破坏维度锁定。
 - **看板娘层级必须低于播放器**：`#waifu` 为 `z-index: 1 !important`，`.music-player` 为 `2`。看板娘固定占右下 300×300 且不穿透点击，层级更高时会把落在该区域的点击全部吃掉（表现为"播放器 / 播放列表点不动"）。
 - **飞鱼保持 `pointer-events: none`**：鱼贴在光标 62px 内、自身对角半径约 73px，参与命中时会偶发盖住光标下的按钮（点一次没反应）。点击涟漪与受惊逃跑走的是 `document` 上的全局 `click` / `mousemove`，与鱼的命中无关，关掉不影响任何交互。

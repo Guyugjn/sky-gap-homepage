@@ -134,11 +134,11 @@ cd /tmp/deploy-nginx && bash install.sh
 
 完整流程、网络限制说明与常见问题见 **[deploy/README.md](deploy/README.md)**。
 
-> 📌 **发布时记得递增版本号**：`index.html` 中 CSS / JS / 字体 CSS / `playlist.js` 的引用都带 `?v=1.3.0`。HTML 不缓存而 css/js 缓存 1 天，改动了这些文件却不递增版本号，老访客 24 小时内会拿到「新页面配旧脚本」。
+> 📌 **发布时记得递增版本号**：`index.html` 中 CSS / JS / 字体 CSS / `playlist.js` 的引用都带 `?v=1.4.0`。HTML 不缓存而 css/js 缓存 1 天，改动了这些文件却不递增版本号，老访客 24 小时内会拿到「新页面配旧脚本」。
 
 > ⚠️ **打包不会自动带上这些资源**：`.gitignore` 排除了 `assets/music/` 下的音频文件（约 178MB，仅保留 `playlist.js`）、`assets/twemoji-72x72/`、`robots.txt`、`sitemap.xml`、`tools/`。`deploy/pack-site.sh` 打包时会**保留**它们，但直接用 git 仓库部署会缺资源，音乐播放、Twemoji 本地图标与 SEO 收录都会失效。
 >
-> 版本包存放在 `release/`，已发布 `sky-gap-v1.0.0/1.1.0/1.2.0/1.3.0.zip`（各约 187–188MB，含音乐 / Twemoji / SEO 文件的完整部署包）。
+> 版本包存放在 `release/`，已发布 `sky-gap-v1.0.0/1.1.0/1.2.0/1.3.0/1.4.0.zip`（各约 187–188MB，含音乐 / Twemoji / SEO 文件的完整部署包）。
 
 ---
 
